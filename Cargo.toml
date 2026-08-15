@@ -1,0 +1,26 @@
+[package]
+name = "inmocore"
+version = "0.1.0"
+description = "InmoCore Analytics Pro (Slint desktop, sin WebView/EGL)"
+edition = "2021"
+
+[build-dependencies]
+slint-build = "1.8"
+
+[dependencies]
+# renderer-software = todo por CPU, sin EGL/OpenGL/Vulkan. Esto es lo que
+# resuelve el crash en el Lenovo G480 (Intel HD Graphics 2500): no negocia
+# ningun contexto grafico con el driver, dibuja directo a un buffer.
+slint = { version = "1.8", default-features = false, features = [
+    "std",
+    "backend-winit",
+    "renderer-software",
+] }
+
+[[bin]]
+name = "inmocore"
+path = "src/main.rs"
+
+[profile.release]
+panic = "unwind"
+opt-level = "s"

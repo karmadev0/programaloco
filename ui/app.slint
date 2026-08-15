@@ -1,0 +1,76 @@
+import { Button, VerticalBox, HorizontalBox } from "std-widgets.slint";
+
+// Un card de KPI. Los 4 del Dashboard original (get_dashboard en Tauri)
+// se arman instanciando este componente 4 veces.
+component KpiCard inherits Rectangle {
+    in property <string> etiqueta;
+    in property <string> valor;
+
+    background: #1e1e2e;
+    border-radius: 10px;
+    border-width: 1px;
+    border-color: #33334d;
+
+    VerticalBox {
+        alignment: center;
+        Text {
+            text: root.valor;
+            font-size: 26px;
+            font-weight: 700;
+            color: #ffffff;
+            horizontal-alignment: center;
+        }
+        Text {
+            text: root.etiqueta;
+            font-size: 13px;
+            color: #a0a0c0;
+            horizontal-alignment: center;
+            wrap: word-wrap;
+        }
+    }
+}
+
+export component AppWindow inherits Window {
+    title: "InmoCore Analytics Pro";
+    preferred-width: 900px;
+    preferred-height: 600px;
+    background: #12121c;
+
+    // Estado que llena main.rs despues de calcular_dashboard(&db).
+    in property <string> comisiones-oficina;
+    in property <string> matches-disponibles;
+    in property <string> expedientes-listos;
+    in property <string> pagos-pendientes;
+
+    // Se dispara al tocar "Actualizar"; main.rs vuelve a leer los CSV
+    // y recalcula los KPIs con logic::calcular_dashboard.
+    callback actualizar();
+
+    VerticalBox {
+        padding: 24px;
+        spacing: 16px;
+
+        Text {
+            text: "Dashboard";
+            font-size: 22px;
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        HorizontalBox {
+            spacing: 16px;
+            height: 140px;
+            KpiCard { etiqueta: "Comisiones oficina"; valor: root.comisiones-oficina; }
+            KpiCard { etiqueta: "Matches disponibles"; valor: root.matches-disponibles; }
+            KpiCard { etiqueta: "Expedientes listos p/firma"; valor: root.expedientes-listos; }
+            KpiCard { etiqueta: "Pagos pendientes"; valor: root.pagos-pendientes; }
+        }
+
+        Button {
+            text: "Actualizar";
+            clicked => { root.actualizar(); }
+        }
+
+        Rectangle { }
+    }
+}
