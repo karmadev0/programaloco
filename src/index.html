@@ -6,12 +6,36 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <main>
-    <h1>InmoCore Analytics Pro</h1>
-    <p>Scaffold de prueba — sin diseño todavia.</p>
-    <button id="btn-ping">Probar backend Rust</button>
-    <p id="resultado"></p>
-  </main>
+  <div class="app">
+    <aside class="sidebar">
+      <h1>InmoCore</h1>
+      <p class="subtitulo">Analytics Pro</p>
+
+      <nav>
+        <button class="nav-btn" data-view="dashboard">Dashboard</button>
+        <button class="nav-btn" data-view="asesores">Ranking Asesores</button>
+        <button class="nav-btn" data-view="matching">Matching Redes</button>
+        <button class="nav-btn" data-view="legal">Checklist Legal</button>
+        <button class="nav-btn" data-view="embudo">Embudo Operativo</button>
+        <button class="nav-btn" data-view="captaciones">Captaciones</button>
+        <button class="nav-btn" data-view="cierres">Cierres</button>
+        <button class="nav-btn" data-view="finanzas">Finanzas</button>
+        <button class="nav-btn" data-view="reportes">Reportes Propietario</button>
+      </nav>
+
+      <p class="subtitulo" style="margin-top:1.5rem;">Agregar</p>
+      <nav>
+        <button class="nav-btn nav-btn-add" data-view="form-cierre">+ Nuevo cierre</button>
+        <button class="nav-btn nav-btn-add" data-view="form-captacion">+ Nueva captación</button>
+        <button class="nav-btn nav-btn-add" data-view="form-finanza">+ Nueva transacción</button>
+      </nav>
+    </aside>
+
+    <main id="content" class="content">
+      <p class="cargando">Cargando…</p>
+    </main>
+  </div>
+
   <script type="module" src="main.js"></script>
 </body>
 </html>
