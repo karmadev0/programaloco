@@ -397,6 +397,17 @@ fn main() {
         ModelRc::new(VecModel::from(coincidencias))
     });
 
+    // Dado un ID de asesor exacto, devuelve su nombre (o "" si no existe).
+    // Usado por CampoAsesor para mostrar el "✓ Nombre" debajo del campo.
+    v.on_resolver_nombre_asesor(move |id| {
+        let db = data::cargar();
+        db.asesores
+            .iter()
+            .find(|a| a.id == id.as_str())
+            .map(|a| a.nombre.clone().into())
+            .unwrap_or_default()
+    });
+
     // --- "Nuevo X": limpia el form y el indice de edicion antes de abrir,
     // asi nunca se pisa un registro existente por error.
     let debil = v.as_weak();

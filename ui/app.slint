@@ -244,18 +244,14 @@ component CampoAsesor inherits Rectangle {
     // Busqueda por texto parcial (nombre o ID); la logica de filtrado vive
     // en Rust porque el lenguaje .slint no tiene "contains" de strings.
     callback buscar(string) -> [AsesorOpcion];
+    // Resuelve el nombre del asesor a partir del ID guardado en "valor".
+    // Igual que "buscar", esta logica vive en Rust porque .slint no permite
+    // bucles imperativos (for/return) dentro de una function.
+    callback resolver-nombre(string) -> string;
 
     property <[AsesorOpcion]> sugerencias: [];
     property <bool> mostrar-sugerencias: false;
-
-    pure function nombre-resuelto() -> string {
-        for a in root.opciones {
-            if a.id == root.valor {
-                return a.nombre;
-            }
-        }
-        return "";
-    }
+    property <string> nombre-resuelto-actual: root.valor == "" ? "" : root.resolver-nombre(root.valor);
 
     VerticalBox {
         padding: 0px;
@@ -281,17 +277,17 @@ component CampoAsesor inherits Rectangle {
             }
         }
 
-        if root.valor != "" && root.nombre-resuelto() != "": HorizontalBox {
+        if root.valor != "" && root.nombre-resuelto-actual != "": HorizontalBox {
             padding: 0px;
             spacing: 0px;
             Rectangle { width: 134px; }
             Text {
-                text: "✓ " + root.nombre-resuelto();
+                text: "✓ " + root.nombre-resuelto-actual;
                 font-size: 11px;
                 color: #6ee7a0;
             }
         }
-        if root.valor != "" && root.nombre-resuelto() == "" && !root.mostrar-sugerencias: HorizontalBox {
+        if root.valor != "" && root.nombre-resuelto-actual == "" && !root.mostrar-sugerencias: HorizontalBox {
             padding: 0px;
             spacing: 0px;
             Rectangle { width: 134px; }
@@ -377,6 +373,9 @@ export component AppWindow inherits Window {
     // --- autocompletado por nombre/ID en los campos de asesor ---
     in property <[AsesorOpcion]> asesores-opciones;
     callback buscar-asesores(string) -> [AsesorOpcion];
+    // Dado un ID de asesor, devuelve su nombre (o "" si no existe). Usado por
+    // CampoAsesor para mostrar el "✓ Nombre" debajo del campo.
+    callback resolver-nombre-asesor(string) -> string;
 
     // --- alta: Asesor ---
     in-out property <bool> mostrar-form-asesor: false;
@@ -663,6 +662,7 @@ export component AppWindow inherits Window {
                             valor <=> root.matching-asesor;
                             opciones: root.asesores-opciones;
                             buscar(t) => { return root.buscar-asesores(t); }
+                            resolver-nombre(id) => { return root.resolver-nombre-asesor(id); }
                         }
                         CampoSelector { etiqueta: "Tipo de operación"; opciones: ["Venta", "Alquiler"]; valor <=> root.matching-tipo-operacion; }
                         CampoTexto { etiqueta: "Zona deseada"; valor <=> root.matching-zona; }
@@ -771,6 +771,7 @@ export component AppWindow inherits Window {
                             valor <=> root.embudo-id-asesor;
                             opciones: root.asesores-opciones;
                             buscar(t) => { return root.buscar-asesores(t); }
+                            resolver-nombre(id) => { return root.resolver-nombre-asesor(id); }
                         }
                         CampoTexto { etiqueta: "Nombre asesor"; valor <=> root.embudo-nombre-asesor; }
                         CampoNumero { etiqueta: "Llamadas realizadas"; valor <=> root.embudo-llamadas; }
@@ -831,12 +832,14 @@ export component AppWindow inherits Window {
                             valor <=> root.cierre-id-captador;
                             opciones: root.asesores-opciones;
                             buscar(t) => { return root.buscar-asesores(t); }
+                            resolver-nombre(id) => { return root.resolver-nombre-asesor(id); }
                         }
                         CampoAsesor {
                             etiqueta: "ID Cerrador";
                             valor <=> root.cierre-id-cerrador;
                             opciones: root.asesores-opciones;
                             buscar(t) => { return root.buscar-asesores(t); }
+                            resolver-nombre(id) => { return root.resolver-nombre-asesor(id); }
                         }
                         CampoNumero { etiqueta: "% Comisión (0.05 = 5%)"; valor <=> root.cierre-pct-comision; }
                         HorizontalBox {
@@ -940,6 +943,7 @@ export component AppWindow inherits Window {
                             valor <=> root.captacion-id-captador;
                             opciones: root.asesores-opciones;
                             buscar(t) => { return root.buscar-asesores(t); }
+                            resolver-nombre(id) => { return root.resolver-nombre-asesor(id); }
                         }
                         CampoFecha {
                             etiqueta: "Fecha de captación";
@@ -1007,6 +1011,7 @@ export component AppWindow inherits Window {
                             valor <=> root.reporte-id-asesor;
                             opciones: root.asesores-opciones;
                             buscar(t) => { return root.buscar-asesores(t); }
+                            resolver-nombre(id) => { return root.resolver-nombre-asesor(id); }
                         }
                         CampoNumero { etiqueta: "Visitas agendadas"; valor <=> root.reporte-visitas; }
                         CampoNumero { etiqueta: "Ofertas recibidas"; valor <=> root.reporte-ofertas; }
