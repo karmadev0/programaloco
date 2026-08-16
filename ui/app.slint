@@ -118,6 +118,15 @@ export component AppWindow inherits Window {
     in property <[Fila]> asesores-rows;
     callback actualizar-asesores();
 
+    // --- alta: Asesor ---
+    property <bool> mostrar-form-asesor: false;
+    in-out property <string> asesor-id;
+    in-out property <string> asesor-nombre;
+    in-out property <string> asesor-fecha-ingreso;
+    in-out property <string> asesor-talleres;
+    in property <string> mensaje-asesor;
+    callback guardar-asesor();
+
     in property <[Fila]> matching-rows;
     callback actualizar-matching();
 
@@ -218,13 +227,30 @@ export component AppWindow inherits Window {
                 Rectangle {}
             }
 
-            // --- 1: BD_Asesores ---
+            // --- 1: BD_Asesores (+ alta) ---
             if root.pantalla == 1: VerticalBox {
                 padding: 24px;
                 spacing: 12px;
                 HorizontalBox {
                     Text { text: "BD Asesores"; font-size: 22px; font-weight: 700; color: #ffffff; horizontal-stretch: 1; }
+                    Button { text: root.mostrar-form-asesor ? "Cerrar formulario" : "Nuevo asesor"; clicked => { root.mostrar-form-asesor = !root.mostrar-form-asesor; } }
                     Button { text: "Actualizar"; clicked => { root.actualizar-asesores(); } }
+                }
+                if root.mostrar-form-asesor: Rectangle {
+                    background: #1a1a26;
+                    border-radius: 8px;
+                    VerticalBox {
+                        padding: 12px;
+                        spacing: 4px;
+                        CampoTexto { etiqueta: "ID (ej. AS-004)"; valor <=> root.asesor-id; }
+                        CampoTexto { etiqueta: "Nombre"; valor <=> root.asesor-nombre; }
+                        CampoTexto { etiqueta: "Fecha ingreso (YYYY-MM-DD)"; valor <=> root.asesor-fecha-ingreso; }
+                        CampoTexto { etiqueta: "Talleres asistidos"; valor <=> root.asesor-talleres; }
+                        HorizontalBox {
+                            Button { text: "Guardar"; clicked => { root.guardar-asesor(); } }
+                            Text { text: root.mensaje-asesor; color: #a0a0c0; font-size: 12px; vertical-alignment: center; }
+                        }
+                    }
                 }
                 TablaGenerica {
                     headers: ["ID", "Nombre", "Ventas", "Alquileres", "Facturado", "% Asistencia", "Score", "Ranking"];

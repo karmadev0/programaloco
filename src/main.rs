@@ -2,7 +2,7 @@ mod data;
 mod logic;
 mod models;
 
-use models::{Captacion, Cierre, TransaccionFinanciera};
+use models::{Asesor, Captacion, Cierre, TransaccionFinanciera};
 use slint::{ModelRc, SharedString, VecModel};
 use std::path::PathBuf;
 
@@ -327,6 +327,41 @@ fn main() {
         v.set_mensaje_cierre("Guardado ✓".into());
         cargar_cierres(&v);
         cargar_dashboard(&v);
+        cargar_asesores(&v);
+    });
+
+    // --- Alta: Asesor ---
+    let debil = v.as_weak();
+    v.on_guardar_asesor(move || {
+        let v = match debil.upgrade() {
+            Some(v) => v,
+            None => return,
+        };
+        let id = v.get_asesor_id().to_string();
+        if id.trim().is_empty() {
+            v.set_mensaje_asesor("Falta el ID".into());
+            return;
+        }
+        let mut db = data::cargar();
+        if db.asesores.iter().any(|a| a.id == id) {
+            v.set_mensaje_asesor("Ya existe un asesor con ese ID".into());
+            return;
+        }
+        db.asesores.push(Asesor {
+            id,
+            nombre: v.get_asesor_nombre().to_string(),
+            fecha_ingreso: v.get_asesor_fecha_ingreso().to_string(),
+            talleres_asistidos: parse_f64(&v.get_asesor_talleres()),
+        });
+        if let Err(e) = data::guardar(&db) {
+            v.set_mensaje_asesor(format!("Error al guardar: {e}").into());
+            return;
+        }
+        v.set_asesor_id("".into());
+        v.set_asesor_nombre("".into());
+        v.set_asesor_fecha_ingreso("".into());
+        v.set_asesor_talleres("".into());
+        v.set_mensaje_asesor("Guardado ✓".into());
         cargar_asesores(&v);
     });
 
