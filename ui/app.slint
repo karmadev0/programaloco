@@ -168,6 +168,32 @@ component NavButton inherits Rectangle {
     TouchArea { clicked => { root.clicked(); } }
 }
 
+// Tarjeta de la seccion Ayuda: nombre de la pestaña, para que sirve, y un
+// ejemplo concreto de uso. "ejemplo" es opcional (texto vacio = se omite).
+component TarjetaAyuda inherits Rectangle {
+    in property <string> titulo;
+    in property <string> para-que-sirve;
+    in property <string> ejemplo;
+    background: #1a1a26;
+    border-radius: 8px;
+    VerticalBox {
+        padding: 16px;
+        spacing: 8px;
+        Text { text: root.titulo; font-size: 16px; font-weight: 700; color: #ffffff; }
+        Text { text: root.para-que-sirve; font-size: 13px; color: #d0d0e0; wrap: word-wrap; }
+        if root.ejemplo != "": Rectangle {
+            background: #10101a;
+            border-radius: 6px;
+            VerticalBox {
+                padding: 10px;
+                spacing: 2px;
+                Text { text: "Ejemplo de uso"; font-size: 11px; font-weight: 700; color: #6ee7a0; }
+                Text { text: root.ejemplo; font-size: 12px; color: #a0a0c0; wrap: word-wrap; }
+            }
+        }
+    }
+}
+
 // Campo de texto con etiqueta, para los 3 formularios de alta.
 component CampoTexto inherits HorizontalBox {
     in property <string> etiqueta;
@@ -576,6 +602,8 @@ export component AppWindow inherits Window {
                 NavButton { etiqueta: "BD Finanzas"; activo: root.pantalla == 6; clicked => { root.pantalla = 6; root.actualizar-finanzas(); } }
                 NavButton { etiqueta: "BD Captaciones"; activo: root.pantalla == 7; clicked => { root.pantalla = 7; root.actualizar-captaciones(); } }
                 NavButton { etiqueta: "Reporte Propietario"; activo: root.pantalla == 8; clicked => { root.pantalla = 8; root.actualizar-reportes(); } }
+                Rectangle { height: 10px; }
+                NavButton { etiqueta: "❓ Ayuda"; activo: root.pantalla == 9; clicked => { root.pantalla = 9; } }
             }
         }
 
@@ -1042,6 +1070,66 @@ export component AppWindow inherits Window {
                     rows: root.reportes-rows;
                     eliminar(i) => { root.eliminar-reporte(i); }
                     editar(i) => { root.editar-reporte(i); }
+                }
+            }
+
+            // --- 9: Ayuda (manual de usuario) ---
+            if root.pantalla == 9: VerticalBox {
+                padding: 24px;
+                spacing: 12px;
+                Text { text: "Ayuda"; font-size: 22px; font-weight: 700; color: #ffffff; }
+                Text { text: "Guía rápida de qué hace cada pestaña y cómo usarla."; font-size: 13px; color: #a0a0c0; }
+                ScrollView {
+                    VerticalBox {
+                        padding: 0px;
+                        spacing: 10px;
+                        TarjetaAyuda {
+                            titulo: "📊 Dashboard";
+                            para-que-sirve: "Vista general de la oficina: comisiones generadas, matches disponibles, expedientes listos para firma y pagos pendientes. Es lo primero que conviene revisar al empezar el día.";
+                            ejemplo: "Entrás cada mañana, tocás \"Actualizar\" y ves de un vistazo si hay expedientes listos para firmar o pagos que se están acumulando.";
+                        }
+                        TarjetaAyuda {
+                            titulo: "👤 BD Asesores";
+                            para-que-sirve: "Base de datos de los asesores de la oficina: ID, nombre, fecha de ingreso y talleres asistidos. Desde acá también se calculan sus ventas, alquileres, facturado y ranking.";
+                            ejemplo: "Se suma un asesor nuevo: tocás \"Nuevo asesor\", cargás su ID (ej. AS-004), nombre y fecha de ingreso, y guardás. Después aparece disponible en el resto de las pestañas donde se pide un asesor.";
+                        }
+                        TarjetaAyuda {
+                            titulo: "🔗 Matching Redes";
+                            para-que-sirve: "Cruza propiedades con posibles compradores/inquilinos según sus criterios de búsqueda, para detectar coincidencias entre lo que se tiene en cartera y lo que se busca.";
+                            ejemplo: "Cargás un cliente que busca un depto de 2 ambientes en cierta zona; el sistema te muestra qué propiedades de la cartera podrían coincidir con ese perfil.";
+                        }
+                        TarjetaAyuda {
+                            titulo: "✅ Checklist Legal";
+                            para-que-sirve: "Seguimiento de la documentación y pasos legales de cada operación (boletos, escrituras, certificados), para saber qué expedientes están completos y cuáles faltan.";
+                            ejemplo: "Antes de una firma, entrás al checklist de esa operación y marcás qué documentos ya están y cuáles siguen pendientes para no llegar a la escritura con algo incompleto.";
+                        }
+                        TarjetaAyuda {
+                            titulo: "🔄 Embudo Operativo";
+                            para-que-sirve: "Seguimiento del proceso comercial de cada oportunidad, desde el primer contacto hasta el cierre, para ver en qué etapa está cada operación en curso.";
+                            ejemplo: "Ves que un lead lleva dos semanas en la etapa de \"visita\" sin avanzar a \"oferta\": es una señal para que el asesor haga seguimiento.";
+                        }
+                        TarjetaAyuda {
+                            titulo: "🏠 BD Cierres";
+                            para-que-sirve: "Registro de las operaciones ya cerradas (ventas o alquileres concretados), con sus datos clave para historial y estadísticas.";
+                            ejemplo: "Se cierra una venta: cargás el registro con el asesor, el inmueble y el monto, y queda guardado como antecedente e insumo para las comisiones.";
+                        }
+                        TarjetaAyuda {
+                            titulo: "💰 BD Finanzas";
+                            para-que-sirve: "Control de comisiones, pagos y movimientos de dinero asociados a las operaciones de la oficina.";
+                            ejemplo: "Después de un cierre, cargás el pago de comisión correspondiente y podés ver en el Dashboard cuánto está pendiente de cobrar o pagar.";
+                        }
+                        TarjetaAyuda {
+                            titulo: "🏘️ BD Captaciones";
+                            para-que-sirve: "Base de datos de las propiedades captadas (las que la oficina tiene en cartera para vender o alquilar), con sus datos y estado.";
+                            ejemplo: "Un asesor capta un nuevo inmueble para la venta; lo cargás acá con sus datos y queda disponible para buscarlo en Matching Redes.";
+                        }
+                        TarjetaAyuda {
+                            titulo: "📄 Reporte Propietario";
+                            para-que-sirve: "Genera y guarda reportes para mantener informado al propietario de un inmueble: visitas agendadas, ofertas recibidas y canales de publicación usados.";
+                            ejemplo: "Cada semana armás un reporte por inmueble para avisarle al propietario cuántas visitas y ofertas tuvo, y marcás si ya se lo enviaste.";
+                        }
+                        Rectangle { height: 8px; }
+                    }
                 }
             }
         }
