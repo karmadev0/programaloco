@@ -41,8 +41,59 @@ fn bool_str(b: bool) -> String {
     if b { "SI".into() } else { "NO".into() }
 }
 
-fn parse_f64(s: &str) -> f64 {
-    s.trim().replace(',', ".").parse::<f64>().unwrap_or(0.0)
+/// Intenta parsear un numero (acepta coma o punto decimal). Devuelve None
+/// si el campo esta vacio o no es un numero valido, para que el llamador
+/// pueda bloquear el guardado con un mensaje claro en vez de guardar un 0
+/// silencioso.
+fn parse_numero(s: &str) -> Option<f64> {
+    let t = s.trim().replace(',', ".");
+    if t.is_empty() {
+        return None;
+    }
+    t.parse::<f64>().ok()
+}
+
+/// Arma "YYYY-MM-DD" a partir de los 3 selectores de fecha (dia/mes/anio).
+fn fecha_str(anio: i32, mes: i32, dia: i32) -> String {
+    format!("{:04}-{:02}-{:02}", anio, mes, dia)
+}
+
+/// Descompone "YYYY-MM-DD" en (anio, mes, dia) para precargar los 3
+/// selectores al editar un registro existente. Si el formato es invalido
+/// (o esta vacio), cae en la fecha de hoy.
+fn partes_de_fecha(s: &str) -> (i32, i32, i32) {
+    let partes: Vec<&str> = s.trim().split('-').collect();
+    if partes.len() == 3 {
+        if let (Ok(y), Ok(m), Ok(d)) = (
+            partes[0].parse::<i32>(),
+            partes[1].parse::<i32>(),
+            partes[2].parse::<i32>(),
+        ) {
+            return (y, m, d);
+        }
+    }
+    hoy_dma()
+}
+
+/// (anio, mes, dia) de hoy, para precargar formularios "Nuevo".
+fn hoy_dma() -> (i32, i32, i32) {
+    let (y, m, d) = logic::hoy_civil();
+    (y as i32, m as i32, d as i32)
+}
+
+/// Exige que un campo numerico este presente y sea valido antes de guardar.
+/// Si falla, deja el mensaje de error en la pantalla correspondiente y
+/// hace `return` de la clausura donde se invoca (bloquea el guardado).
+macro_rules! numero_obligatorio {
+    ($v:expr, $texto:expr, $campo:literal, $set_msg:ident) => {
+        match parse_numero(&$texto) {
+            Some(n) => n,
+            None => {
+                $v.$set_msg(format!("El campo '{}' debe ser un número válido.", $campo).into());
+                return;
+            }
+        }
+    };
 }
 
 fn existe_asesor(db: &models::Database, id: &str) -> bool {
@@ -308,9 +359,12 @@ fn main() {
     let debil = v.as_weak();
     v.on_nuevo_asesor(move || {
         if let Some(v) = debil.upgrade() {
+            let (y, m, d) = hoy_dma();
             v.set_asesor_id("".into());
             v.set_asesor_nombre("".into());
-            v.set_asesor_fecha_ingreso("".into());
+            v.set_asesor_fecha_ingreso_anio(y);
+            v.set_asesor_fecha_ingreso_mes(m);
+            v.set_asesor_fecha_ingreso_dia(d);
             v.set_asesor_talleres("".into());
             v.set_asesor_editando(-1);
             v.set_mensaje_asesor("".into());
@@ -320,15 +374,18 @@ fn main() {
     let debil = v.as_weak();
     v.on_nuevo_matching(move || {
         if let Some(v) = debil.upgrade() {
+            let (y, m, d) = hoy_dma();
             v.set_matching_id("".into());
             v.set_matching_cliente("".into());
             v.set_matching_asesor("".into());
-            v.set_matching_tipo_operacion("".into());
+            v.set_matching_tipo_operacion("Venta".into());
             v.set_matching_zona("".into());
             v.set_matching_presupuesto("".into());
             v.set_matching_inmueble("".into());
             v.set_matching_precio("".into());
-            v.set_matching_fecha_venc("".into());
+            v.set_matching_fecha_venc_anio(y);
+            v.set_matching_fecha_venc_mes(m);
+            v.set_matching_fecha_venc_dia(d);
             v.set_matching_editando(-1);
             v.set_mensaje_matching("".into());
             v.set_mostrar_form_matching(true);
@@ -343,9 +400,9 @@ fn main() {
             v.set_legal_cedula(false);
             v.set_legal_catastral(false);
             v.set_legal_solvencia(false);
-            v.set_legal_liberacion_hipoteca("".into());
-            v.set_legal_borrador_contrato("".into());
-            v.set_legal_estatus_notaria("".into());
+            v.set_legal_liberacion_hipoteca("N/A".into());
+            v.set_legal_borrador_contrato("PENDIENTE".into());
+            v.set_legal_estatus_notaria("PENDIENTE".into());
             v.set_legal_editando(-1);
             v.set_mensaje_legal("".into());
             v.set_mostrar_form_legal(true);
@@ -369,10 +426,13 @@ fn main() {
     let debil = v.as_weak();
     v.on_nuevo_cierre(move || {
         if let Some(v) = debil.upgrade() {
+            let (y, m, d) = hoy_dma();
             v.set_cierre_id("".into());
-            v.set_cierre_fecha("".into());
+            v.set_cierre_fecha_anio(y);
+            v.set_cierre_fecha_mes(m);
+            v.set_cierre_fecha_dia(d);
             v.set_cierre_cod_inmueble("".into());
-            v.set_cierre_tipo_operacion("".into());
+            v.set_cierre_tipo_operacion("Venta".into());
             v.set_cierre_monto("".into());
             v.set_cierre_id_captador("".into());
             v.set_cierre_id_cerrador("".into());
@@ -385,12 +445,15 @@ fn main() {
     let debil = v.as_weak();
     v.on_nuevo_captacion(move || {
         if let Some(v) = debil.upgrade() {
+            let (y, m, d) = hoy_dma();
             v.set_captacion_cod_inmueble("".into());
-            v.set_captacion_tipo_propiedad("".into());
+            v.set_captacion_tipo_propiedad("Casa".into());
             v.set_captacion_id_captador("".into());
-            v.set_captacion_fecha("".into());
+            v.set_captacion_fecha_anio(y);
+            v.set_captacion_fecha_mes(m);
+            v.set_captacion_fecha_dia(d);
             v.set_captacion_precio("".into());
-            v.set_captacion_estatus("".into());
+            v.set_captacion_estatus("Disponible".into());
             v.set_captacion_web(false);
             v.set_captacion_rrss(false);
             v.set_captacion_editando(-1);
@@ -401,13 +464,16 @@ fn main() {
     let debil = v.as_weak();
     v.on_nuevo_finanza(move || {
         if let Some(v) = debil.upgrade() {
+            let (y, m, d) = hoy_dma();
             v.set_finanza_id("".into());
-            v.set_finanza_fecha("".into());
+            v.set_finanza_fecha_anio(y);
+            v.set_finanza_fecha_mes(m);
+            v.set_finanza_fecha_dia(d);
             v.set_finanza_semana("".into());
-            v.set_finanza_tipo_flujo("".into());
+            v.set_finanza_tipo_flujo("Ingreso".into());
             v.set_finanza_categoria("".into());
             v.set_finanza_monto("".into());
-            v.set_finanza_estatus("".into());
+            v.set_finanza_estatus("Pendiente".into());
             v.set_finanza_editando(-1);
             v.set_mensaje_finanza("".into());
             v.set_mostrar_form_finanza(true);
@@ -424,7 +490,7 @@ fn main() {
             v.set_reporte_ofertas("".into());
             v.set_reporte_canales("".into());
             v.set_reporte_notas("".into());
-            v.set_reporte_estatus_envio("".into());
+            v.set_reporte_estatus_envio("PENDIENTE".into());
             v.set_reporte_editando(-1);
             v.set_mensaje_reporte("".into());
             v.set_mostrar_form_reporte(true);
@@ -445,7 +511,10 @@ fn main() {
                 v.set_matching_presupuesto(r.presupuesto_max.to_string().into());
                 v.set_matching_inmueble(r.inmueble_matcheado.clone().into());
                 v.set_matching_precio(r.precio_lista.to_string().into());
-                v.set_matching_fecha_venc(r.fecha_venc_exclusividad.clone().into());
+                let (y, m, d) = partes_de_fecha(&r.fecha_venc_exclusividad);
+                v.set_matching_fecha_venc_anio(y);
+                v.set_matching_fecha_venc_mes(m);
+                v.set_matching_fecha_venc_dia(d);
                 v.set_matching_editando(i);
                 v.set_mostrar_form_matching(true);
                 v.set_mensaje_matching("".into());
@@ -469,6 +538,8 @@ fn main() {
             v.set_mensaje_matching(format!("El asesor '{asesor}' no existe en BD Asesores").into());
             return;
         }
+        let presupuesto = numero_obligatorio!(v, v.get_matching_presupuesto().to_string(), "Presupuesto máx.", set_mensaje_matching);
+        let precio = numero_obligatorio!(v, v.get_matching_precio().to_string(), "Precio lista inmueble", set_mensaje_matching);
         let idx = v.get_matching_editando();
         let registro = Requerimiento {
             id,
@@ -476,10 +547,10 @@ fn main() {
             asesor_cliente: asesor,
             tipo_operacion: v.get_matching_tipo_operacion().to_string(),
             zona_deseada: v.get_matching_zona().to_string(),
-            presupuesto_max: parse_f64(&v.get_matching_presupuesto()),
+            presupuesto_max: presupuesto,
             inmueble_matcheado: v.get_matching_inmueble().to_string(),
-            precio_lista: parse_f64(&v.get_matching_precio()),
-            fecha_venc_exclusividad: v.get_matching_fecha_venc().to_string(),
+            precio_lista: precio,
+            fecha_venc_exclusividad: fecha_str(v.get_matching_fecha_venc_anio(), v.get_matching_fecha_venc_mes(), v.get_matching_fecha_venc_dia()),
         };
         if idx >= 0 && (idx as usize) < db.matching.len() {
             db.matching[idx as usize] = registro;
@@ -498,7 +569,6 @@ fn main() {
         v.set_matching_presupuesto("".into());
         v.set_matching_inmueble("".into());
         v.set_matching_precio("".into());
-        v.set_matching_fecha_venc("".into());
         v.set_matching_editando(-1);
         v.set_mostrar_form_matching(false);
         v.set_mensaje_matching("Guardado ✓".into());
@@ -609,15 +679,20 @@ fn main() {
             v.set_mensaje_embudo(format!("El asesor '{id}' no existe en BD Asesores").into());
             return;
         }
+        let llamadas = numero_obligatorio!(v, v.get_embudo_llamadas().to_string(), "Llamadas realizadas", set_mensaje_embudo);
+        let citas = numero_obligatorio!(v, v.get_embudo_citas().to_string(), "Citas captación", set_mensaje_embudo);
+        let visitas = numero_obligatorio!(v, v.get_embudo_visitas().to_string(), "Visitas guiadas", set_mensaje_embudo);
+        let ofertas = numero_obligatorio!(v, v.get_embudo_ofertas().to_string(), "Ofertas recibidas", set_mensaje_embudo);
+        let cierres = numero_obligatorio!(v, v.get_embudo_cierres().to_string(), "Cierres del mes", set_mensaje_embudo);
         let idx = v.get_embudo_editando();
         let registro = EmbudoAsesor {
             id_asesor: id,
             nombre_asesor: v.get_embudo_nombre_asesor().to_string(),
-            llamadas_realizadas: parse_f64(&v.get_embudo_llamadas()),
-            citas_captacion: parse_f64(&v.get_embudo_citas()),
-            visitas_guiadas: parse_f64(&v.get_embudo_visitas()),
-            ofertas_recibidas: parse_f64(&v.get_embudo_ofertas()),
-            cierres_mes: parse_f64(&v.get_embudo_cierres()),
+            llamadas_realizadas: llamadas,
+            citas_captacion: citas,
+            visitas_guiadas: visitas,
+            ofertas_recibidas: ofertas,
+            cierres_mes: cierres,
         };
         if idx >= 0 && (idx as usize) < db.embudo.len() {
             db.embudo[idx as usize] = registro;
@@ -680,13 +755,15 @@ fn main() {
             return;
         }
         let idx = v.get_reporte_editando();
+        let visitas = numero_obligatorio!(v, v.get_reporte_visitas().to_string(), "Visitas agendadas", set_mensaje_reporte);
+        let ofertas = numero_obligatorio!(v, v.get_reporte_ofertas().to_string(), "Ofertas recibidas", set_mensaje_reporte);
         let registro = ReportePropietario {
             cod_inmueble: cod,
             propietario: v.get_reporte_propietario().to_string(),
             telefono: v.get_reporte_telefono().to_string(),
             id_asesor,
-            visitas_agendadas: parse_f64(&v.get_reporte_visitas()),
-            ofertas_recibidas: parse_f64(&v.get_reporte_ofertas()),
+            visitas_agendadas: visitas,
+            ofertas_recibidas: ofertas,
             canales_publicacion: v.get_reporte_canales().to_string(),
             notas: v.get_reporte_notas().to_string(),
             estatus_envio: v.get_reporte_estatus_envio().to_string(),
@@ -722,7 +799,10 @@ fn main() {
             let db = data::cargar();
             if let Some(c) = db.cierres.get(i as usize) {
                 v.set_cierre_id(c.id.clone().into());
-                v.set_cierre_fecha(c.fecha_cierre.clone().into());
+                let (y, m, d) = partes_de_fecha(&c.fecha_cierre);
+                v.set_cierre_fecha_anio(y);
+                v.set_cierre_fecha_mes(m);
+                v.set_cierre_fecha_dia(d);
                 v.set_cierre_cod_inmueble(c.cod_inmueble.clone().into());
                 v.set_cierre_tipo_operacion(c.tipo_operacion.clone().into());
                 v.set_cierre_monto(c.monto_operacion.to_string().into());
@@ -758,15 +838,17 @@ fn main() {
             return;
         }
         let idx = v.get_cierre_editando();
+        let monto = numero_obligatorio!(v, v.get_cierre_monto().to_string(), "Monto operación", set_mensaje_cierre);
+        let pct = numero_obligatorio!(v, v.get_cierre_pct_comision().to_string(), "% Comisión", set_mensaje_cierre);
         let registro = Cierre {
             id,
-            fecha_cierre: v.get_cierre_fecha().to_string(),
+            fecha_cierre: fecha_str(v.get_cierre_fecha_anio(), v.get_cierre_fecha_mes(), v.get_cierre_fecha_dia()),
             cod_inmueble: v.get_cierre_cod_inmueble().to_string(),
             tipo_operacion: v.get_cierre_tipo_operacion().to_string(),
-            monto_operacion: parse_f64(&v.get_cierre_monto()),
+            monto_operacion: monto,
             id_captador,
             id_cerrador,
-            pct_comision_total: parse_f64(&v.get_cierre_pct_comision()),
+            pct_comision_total: pct,
         };
         if idx >= 0 && (idx as usize) < db.cierres.len() {
             db.cierres[idx as usize] = registro;
@@ -778,9 +860,7 @@ fn main() {
             return;
         }
         v.set_cierre_id("".into());
-        v.set_cierre_fecha("".into());
         v.set_cierre_cod_inmueble("".into());
-        v.set_cierre_tipo_operacion("".into());
         v.set_cierre_monto("".into());
         v.set_cierre_id_captador("".into());
         v.set_cierre_id_cerrador("".into());
@@ -861,7 +941,10 @@ fn main() {
             if let Some(a) = db.asesores.get(i as usize) {
                 v.set_asesor_id(a.id.clone().into());
                 v.set_asesor_nombre(a.nombre.clone().into());
-                v.set_asesor_fecha_ingreso(a.fecha_ingreso.clone().into());
+                let (y, m, d) = partes_de_fecha(&a.fecha_ingreso);
+                v.set_asesor_fecha_ingreso_anio(y);
+                v.set_asesor_fecha_ingreso_mes(m);
+                v.set_asesor_fecha_ingreso_dia(d);
                 v.set_asesor_talleres(a.talleres_asistidos.to_string().into());
                 v.set_asesor_editando(i);
                 v.set_mostrar_form_asesor(true);
@@ -891,11 +974,12 @@ fn main() {
             v.set_mensaje_asesor("Ya existe un asesor con ese ID".into());
             return;
         }
+        let talleres = numero_obligatorio!(v, v.get_asesor_talleres().to_string(), "Talleres asistidos", set_mensaje_asesor);
         let registro = Asesor {
             id,
             nombre: v.get_asesor_nombre().to_string(),
-            fecha_ingreso: v.get_asesor_fecha_ingreso().to_string(),
-            talleres_asistidos: parse_f64(&v.get_asesor_talleres()),
+            fecha_ingreso: fecha_str(v.get_asesor_fecha_ingreso_anio(), v.get_asesor_fecha_ingreso_mes(), v.get_asesor_fecha_ingreso_dia()),
+            talleres_asistidos: talleres,
         };
         if idx >= 0 && (idx as usize) < db.asesores.len() {
             db.asesores[idx as usize] = registro;
@@ -908,7 +992,6 @@ fn main() {
         }
         v.set_asesor_id("".into());
         v.set_asesor_nombre("".into());
-        v.set_asesor_fecha_ingreso("".into());
         v.set_asesor_talleres("".into());
         v.set_asesor_editando(-1);
         v.set_mostrar_form_asesor(false);
@@ -925,7 +1008,10 @@ fn main() {
                 v.set_captacion_cod_inmueble(c.cod_inmueble.clone().into());
                 v.set_captacion_tipo_propiedad(c.tipo_propiedad.clone().into());
                 v.set_captacion_id_captador(c.id_captador.clone().into());
-                v.set_captacion_fecha(c.fecha_captacion.clone().into());
+                let (y, m, d) = partes_de_fecha(&c.fecha_captacion);
+                v.set_captacion_fecha_anio(y);
+                v.set_captacion_fecha_mes(m);
+                v.set_captacion_fecha_dia(d);
                 v.set_captacion_precio(c.precio_lista.to_string().into());
                 v.set_captacion_estatus(c.estatus.clone().into());
                 v.set_captacion_web(c.publicado_web);
@@ -954,12 +1040,13 @@ fn main() {
             return;
         }
         let idx = v.get_captacion_editando();
+        let precio = numero_obligatorio!(v, v.get_captacion_precio().to_string(), "Precio Lista", set_mensaje_captacion);
         let registro = Captacion {
             cod_inmueble: cod,
             tipo_propiedad: v.get_captacion_tipo_propiedad().to_string(),
             id_captador,
-            fecha_captacion: v.get_captacion_fecha().to_string(),
-            precio_lista: parse_f64(&v.get_captacion_precio()),
+            fecha_captacion: fecha_str(v.get_captacion_fecha_anio(), v.get_captacion_fecha_mes(), v.get_captacion_fecha_dia()),
+            precio_lista: precio,
             estatus: v.get_captacion_estatus().to_string(),
             publicado_web: v.get_captacion_web(),
             publicado_rrss: v.get_captacion_rrss(),
@@ -974,11 +1061,8 @@ fn main() {
             return;
         }
         v.set_captacion_cod_inmueble("".into());
-        v.set_captacion_tipo_propiedad("".into());
         v.set_captacion_id_captador("".into());
-        v.set_captacion_fecha("".into());
         v.set_captacion_precio("".into());
-        v.set_captacion_estatus("".into());
         v.set_captacion_web(false);
         v.set_captacion_rrss(false);
         v.set_captacion_editando(-1);
@@ -994,7 +1078,10 @@ fn main() {
             let db = data::cargar();
             if let Some(t) = db.finanzas.get(i as usize) {
                 v.set_finanza_id(t.id.clone().into());
-                v.set_finanza_fecha(t.fecha.clone().into());
+                let (y, m, d) = partes_de_fecha(&t.fecha);
+                v.set_finanza_fecha_anio(y);
+                v.set_finanza_fecha_mes(m);
+                v.set_finanza_fecha_dia(d);
                 v.set_finanza_semana(t.semana.clone().into());
                 v.set_finanza_tipo_flujo(t.tipo_flujo.clone().into());
                 v.set_finanza_categoria(t.categoria.clone().into());
@@ -1019,13 +1106,14 @@ fn main() {
         }
         let idx = v.get_finanza_editando();
         let mut db = data::cargar();
+        let monto = numero_obligatorio!(v, v.get_finanza_monto().to_string(), "Monto", set_mensaje_finanza);
         let registro = TransaccionFinanciera {
             id,
-            fecha: v.get_finanza_fecha().to_string(),
+            fecha: fecha_str(v.get_finanza_fecha_anio(), v.get_finanza_fecha_mes(), v.get_finanza_fecha_dia()),
             semana: v.get_finanza_semana().to_string(),
             tipo_flujo: v.get_finanza_tipo_flujo().to_string(),
             categoria: v.get_finanza_categoria().to_string(),
-            monto: parse_f64(&v.get_finanza_monto()),
+            monto,
             estatus_pago: v.get_finanza_estatus().to_string(),
         };
         if idx >= 0 && (idx as usize) < db.finanzas.len() {
@@ -1038,12 +1126,9 @@ fn main() {
             return;
         }
         v.set_finanza_id("".into());
-        v.set_finanza_fecha("".into());
         v.set_finanza_semana("".into());
-        v.set_finanza_tipo_flujo("".into());
         v.set_finanza_categoria("".into());
         v.set_finanza_monto("".into());
-        v.set_finanza_estatus("".into());
         v.set_finanza_editando(-1);
         v.set_mostrar_form_finanza(false);
         v.set_mensaje_finanza("Guardado ✓".into());

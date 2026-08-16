@@ -1,4 +1,4 @@
-import { Button, VerticalBox, HorizontalBox, ScrollView, LineEdit, CheckBox } from "std-widgets.slint";
+import { Button, VerticalBox, HorizontalBox, ScrollView, LineEdit, CheckBox, ComboBox, SpinBox } from "std-widgets.slint";
 
 export struct Fila {
     celdas: [string],
@@ -118,6 +118,48 @@ component CampoCheck inherits HorizontalBox {
     caja := CheckBox { text: root.etiqueta; }
 }
 
+// Campo numerico: igual que CampoTexto pero avisa en la propia etiqueta que
+// solo se espera un numero. El bloqueo real (no guardar si no es numero) se
+// hace en Rust al momento de guardar (parse_numero / parse_numero_obligatorio).
+component CampoNumero inherits HorizontalBox {
+    in property <string> etiqueta;
+    in-out property <string> valor <=> entrada.text;
+    height: 32px;
+    Text { text: root.etiqueta + " (número)"; width: 190px; color: #a0a0c0; font-size: 12px; vertical-alignment: center; wrap: word-wrap; }
+    entrada := LineEdit { horizontal-stretch: 1; placeholder-text: "0"; }
+}
+
+// Campo de seleccion (lista fija): evita errores de tipeo en estatus/tipo,
+// que ademas la logica de negocio compara con strings exactos (ej. "Venta",
+// "Pagado"). El valor viaje igual que en CampoTexto (string plano), asi que
+// el lado Rust no necesita cambios: solo cambia el widget visual.
+component CampoSelector inherits HorizontalBox {
+    in property <string> etiqueta;
+    in property <[string]> opciones;
+    in-out property <string> valor <=> combo.current-value;
+    height: 32px;
+    Text { text: root.etiqueta; width: 190px; color: #a0a0c0; font-size: 12px; vertical-alignment: center; wrap: word-wrap; }
+    combo := ComboBox { model: root.opciones; horizontal-stretch: 1; }
+}
+
+// Selector de fecha con 3 ruedas (dia/mes/anio) en vez de texto libre, para
+// que sea imposible escribir una fecha con formato invalido. Se precarga
+// con la fecha de "hoy" desde Rust al abrir un formulario nuevo.
+component CampoFecha inherits HorizontalBox {
+    in property <string> etiqueta;
+    in-out property <int> dia <=> rueda-dia.value;
+    in-out property <int> mes <=> rueda-mes.value;
+    in-out property <int> anio <=> rueda-anio.value;
+    height: 32px;
+    spacing: 4px;
+    Text { text: root.etiqueta; width: 190px; color: #a0a0c0; font-size: 12px; vertical-alignment: center; wrap: word-wrap; }
+    rueda-dia := SpinBox { minimum: 1; maximum: 31; width: 78px; }
+    Text { text: "/"; color: #a0a0c0; vertical-alignment: center; }
+    rueda-mes := SpinBox { minimum: 1; maximum: 12; width: 78px; }
+    Text { text: "/"; color: #a0a0c0; vertical-alignment: center; }
+    rueda-anio := SpinBox { minimum: 2000; maximum: 2100; width: 90px; }
+}
+
 export component AppWindow inherits Window {
     title: "InmoCore Analytics Pro";
     preferred-width: 1050px;
@@ -144,7 +186,9 @@ export component AppWindow inherits Window {
     in-out property <bool> mostrar-form-asesor: false;
     in-out property <string> asesor-id;
     in-out property <string> asesor-nombre;
-    in-out property <string> asesor-fecha-ingreso;
+    in-out property <int> asesor-fecha-ingreso-dia: 1;
+    in-out property <int> asesor-fecha-ingreso-mes: 1;
+    in-out property <int> asesor-fecha-ingreso-anio: 2026;
     in-out property <string> asesor-talleres;
     in property <string> mensaje-asesor;
     callback guardar-asesor();
@@ -166,7 +210,9 @@ export component AppWindow inherits Window {
     in-out property <string> matching-presupuesto;
     in-out property <string> matching-inmueble;
     in-out property <string> matching-precio;
-    in-out property <string> matching-fecha-venc;
+    in-out property <int> matching-fecha-venc-dia: 1;
+    in-out property <int> matching-fecha-venc-mes: 1;
+    in-out property <int> matching-fecha-venc-anio: 2026;
     in property <string> mensaje-matching;
     callback guardar-matching();
     in-out property <int> matching-editando: -1;
@@ -254,7 +300,9 @@ export component AppWindow inherits Window {
     // --- alta: Cierre ---
     in-out property <bool> mostrar-form-cierre: false;
     in-out property <string> cierre-id;
-    in-out property <string> cierre-fecha;
+    in-out property <int> cierre-fecha-dia: 1;
+    in-out property <int> cierre-fecha-mes: 1;
+    in-out property <int> cierre-fecha-anio: 2026;
     in-out property <string> cierre-cod-inmueble;
     in-out property <string> cierre-tipo-operacion;
     in-out property <string> cierre-monto;
@@ -272,7 +320,9 @@ export component AppWindow inherits Window {
     in-out property <string> captacion-cod-inmueble;
     in-out property <string> captacion-tipo-propiedad;
     in-out property <string> captacion-id-captador;
-    in-out property <string> captacion-fecha;
+    in-out property <int> captacion-fecha-dia: 1;
+    in-out property <int> captacion-fecha-mes: 1;
+    in-out property <int> captacion-fecha-anio: 2026;
     in-out property <string> captacion-precio;
     in-out property <string> captacion-estatus;
     in-out property <bool> captacion-web;
@@ -286,7 +336,9 @@ export component AppWindow inherits Window {
     // --- alta: Finanza ---
     in-out property <bool> mostrar-form-finanza: false;
     in-out property <string> finanza-id;
-    in-out property <string> finanza-fecha;
+    in-out property <int> finanza-fecha-dia: 1;
+    in-out property <int> finanza-fecha-mes: 1;
+    in-out property <int> finanza-fecha-anio: 2026;
     in-out property <string> finanza-semana;
     in-out property <string> finanza-tipo-flujo;
     in-out property <string> finanza-categoria;
@@ -363,8 +415,13 @@ export component AppWindow inherits Window {
                         spacing: 4px;
                         CampoTexto { etiqueta: "ID (ej. AS-004)"; valor <=> root.asesor-id; }
                         CampoTexto { etiqueta: "Nombre"; valor <=> root.asesor-nombre; }
-                        CampoTexto { etiqueta: "Fecha ingreso (YYYY-MM-DD)"; valor <=> root.asesor-fecha-ingreso; }
-                        CampoTexto { etiqueta: "Talleres asistidos"; valor <=> root.asesor-talleres; }
+                        CampoFecha {
+                            etiqueta: "Fecha ingreso";
+                            dia <=> root.asesor-fecha-ingreso-dia;
+                            mes <=> root.asesor-fecha-ingreso-mes;
+                            anio <=> root.asesor-fecha-ingreso-anio;
+                        }
+                        CampoNumero { etiqueta: "Talleres asistidos"; valor <=> root.asesor-talleres; }
                         HorizontalBox {
                             Button { text: root.asesor-editando >= 0 ? "Actualizar" : "Guardar"; clicked => { root.guardar-asesor(); } }
                             Text { text: root.mensaje-asesor; color: #a0a0c0; font-size: 12px; vertical-alignment: center; }
@@ -406,12 +463,17 @@ export component AppWindow inherits Window {
                         CampoTexto { etiqueta: "ID (ej. REQ-004)"; valor <=> root.matching-id; }
                         CampoTexto { etiqueta: "Cliente buscador"; valor <=> root.matching-cliente; }
                         CampoTexto { etiqueta: "ID Asesor cliente"; valor <=> root.matching-asesor; }
-                        CampoTexto { etiqueta: "Tipo (Venta/Alquiler)"; valor <=> root.matching-tipo-operacion; }
+                        CampoSelector { etiqueta: "Tipo de operación"; opciones: ["Venta", "Alquiler"]; valor <=> root.matching-tipo-operacion; }
                         CampoTexto { etiqueta: "Zona deseada"; valor <=> root.matching-zona; }
-                        CampoTexto { etiqueta: "Presupuesto máx."; valor <=> root.matching-presupuesto; }
+                        CampoNumero { etiqueta: "Presupuesto máx."; valor <=> root.matching-presupuesto; }
                         CampoTexto { etiqueta: "Cod. inmueble matcheado"; valor <=> root.matching-inmueble; }
-                        CampoTexto { etiqueta: "Precio lista inmueble"; valor <=> root.matching-precio; }
-                        CampoTexto { etiqueta: "Venc. exclusividad (YYYY-MM-DD)"; valor <=> root.matching-fecha-venc; }
+                        CampoNumero { etiqueta: "Precio lista inmueble"; valor <=> root.matching-precio; }
+                        CampoFecha {
+                            etiqueta: "Venc. exclusividad";
+                            dia <=> root.matching-fecha-venc-dia;
+                            mes <=> root.matching-fecha-venc-mes;
+                            anio <=> root.matching-fecha-venc-anio;
+                        }
                         HorizontalBox {
                             Button { text: root.matching-editando >= 0 ? "Actualizar" : "Guardar"; clicked => { root.guardar-matching(); } }
                             Text { text: root.mensaje-matching; color: #a0a0c0; font-size: 12px; vertical-alignment: center; }
@@ -462,9 +524,9 @@ export component AppWindow inherits Window {
                             CampoCheck { etiqueta: "Ficha catastral"; valor <=> root.legal-catastral; }
                             CampoCheck { etiqueta: "Solvencia municipal"; valor <=> root.legal-solvencia; }
                         }
-                        CampoTexto { etiqueta: "Liberación hipoteca (SI/NO/N-A)"; valor <=> root.legal-liberacion-hipoteca; }
-                        CampoTexto { etiqueta: "Borrador contrato"; valor <=> root.legal-borrador-contrato; }
-                        CampoTexto { etiqueta: "Estatus notaría"; valor <=> root.legal-estatus-notaria; }
+                        CampoSelector { etiqueta: "Liberación hipoteca"; opciones: ["SI", "NO", "N/A"]; valor <=> root.legal-liberacion-hipoteca; }
+                        CampoSelector { etiqueta: "Borrador contrato"; opciones: ["APROBADO", "EN REVISIÓN", "PENDIENTE"]; valor <=> root.legal-borrador-contrato; }
+                        CampoSelector { etiqueta: "Estatus notaría"; opciones: ["PENDIENTE", "EN TRÁMITE", "PROGRAMADA", "COMPLETADA"]; valor <=> root.legal-estatus-notaria; }
                         HorizontalBox {
                             Button { text: root.legal-editando >= 0 ? "Actualizar" : "Guardar"; clicked => { root.guardar-legal(); } }
                             Text { text: root.mensaje-legal; color: #a0a0c0; font-size: 12px; vertical-alignment: center; }
@@ -505,11 +567,11 @@ export component AppWindow inherits Window {
                         spacing: 4px;
                         CampoTexto { etiqueta: "ID Asesor"; valor <=> root.embudo-id-asesor; }
                         CampoTexto { etiqueta: "Nombre asesor"; valor <=> root.embudo-nombre-asesor; }
-                        CampoTexto { etiqueta: "Llamadas realizadas"; valor <=> root.embudo-llamadas; }
-                        CampoTexto { etiqueta: "Citas captación"; valor <=> root.embudo-citas; }
-                        CampoTexto { etiqueta: "Visitas guiadas"; valor <=> root.embudo-visitas; }
-                        CampoTexto { etiqueta: "Ofertas recibidas"; valor <=> root.embudo-ofertas; }
-                        CampoTexto { etiqueta: "Cierres del mes"; valor <=> root.embudo-cierres; }
+                        CampoNumero { etiqueta: "Llamadas realizadas"; valor <=> root.embudo-llamadas; }
+                        CampoNumero { etiqueta: "Citas captación"; valor <=> root.embudo-citas; }
+                        CampoNumero { etiqueta: "Visitas guiadas"; valor <=> root.embudo-visitas; }
+                        CampoNumero { etiqueta: "Ofertas recibidas"; valor <=> root.embudo-ofertas; }
+                        CampoNumero { etiqueta: "Cierres del mes"; valor <=> root.embudo-cierres; }
                         HorizontalBox {
                             Button { text: root.embudo-editando >= 0 ? "Actualizar" : "Guardar"; clicked => { root.guardar-embudo(); } }
                             Text { text: root.mensaje-embudo; color: #a0a0c0; font-size: 12px; vertical-alignment: center; }
@@ -549,13 +611,18 @@ export component AppWindow inherits Window {
                         padding: 12px;
                         spacing: 4px;
                         CampoTexto { etiqueta: "ID"; valor <=> root.cierre-id; }
-                        CampoTexto { etiqueta: "Fecha (YYYY-MM-DD)"; valor <=> root.cierre-fecha; }
+                        CampoFecha {
+                            etiqueta: "Fecha de cierre";
+                            dia <=> root.cierre-fecha-dia;
+                            mes <=> root.cierre-fecha-mes;
+                            anio <=> root.cierre-fecha-anio;
+                        }
                         CampoTexto { etiqueta: "Cod. Inmueble"; valor <=> root.cierre-cod-inmueble; }
-                        CampoTexto { etiqueta: "Tipo (Venta/Alquiler)"; valor <=> root.cierre-tipo-operacion; }
-                        CampoTexto { etiqueta: "Monto operación"; valor <=> root.cierre-monto; }
+                        CampoSelector { etiqueta: "Tipo de operación"; opciones: ["Venta", "Alquiler"]; valor <=> root.cierre-tipo-operacion; }
+                        CampoNumero { etiqueta: "Monto operación"; valor <=> root.cierre-monto; }
                         CampoTexto { etiqueta: "ID Captador"; valor <=> root.cierre-id-captador; }
                         CampoTexto { etiqueta: "ID Cerrador"; valor <=> root.cierre-id-cerrador; }
-                        CampoTexto { etiqueta: "% Comisión (0.05=5%)"; valor <=> root.cierre-pct-comision; }
+                        CampoNumero { etiqueta: "% Comisión (0.05 = 5%)"; valor <=> root.cierre-pct-comision; }
                         HorizontalBox {
                             Button { text: root.cierre-editando >= 0 ? "Actualizar" : "Guardar"; clicked => { root.guardar-cierre(); } }
                             Text { text: root.mensaje-cierre; color: #a0a0c0; font-size: 12px; vertical-alignment: center; }
@@ -601,12 +668,17 @@ export component AppWindow inherits Window {
                         padding: 12px;
                         spacing: 4px;
                         CampoTexto { etiqueta: "ID"; valor <=> root.finanza-id; }
-                        CampoTexto { etiqueta: "Fecha (YYYY-MM-DD)"; valor <=> root.finanza-fecha; }
+                        CampoFecha {
+                            etiqueta: "Fecha";
+                            dia <=> root.finanza-fecha-dia;
+                            mes <=> root.finanza-fecha-mes;
+                            anio <=> root.finanza-fecha-anio;
+                        }
                         CampoTexto { etiqueta: "Semana"; valor <=> root.finanza-semana; }
-                        CampoTexto { etiqueta: "Tipo (Ingreso/Egreso)"; valor <=> root.finanza-tipo-flujo; }
+                        CampoSelector { etiqueta: "Tipo de flujo"; opciones: ["Ingreso", "Egreso"]; valor <=> root.finanza-tipo-flujo; }
                         CampoTexto { etiqueta: "Categoría"; valor <=> root.finanza-categoria; }
-                        CampoTexto { etiqueta: "Monto"; valor <=> root.finanza-monto; }
-                        CampoTexto { etiqueta: "Estatus (Pagado/Pendiente)"; valor <=> root.finanza-estatus; }
+                        CampoNumero { etiqueta: "Monto"; valor <=> root.finanza-monto; }
+                        CampoSelector { etiqueta: "Estatus de pago"; opciones: ["Pagado", "Pendiente"]; valor <=> root.finanza-estatus; }
                         HorizontalBox {
                             Button { text: root.finanza-editando >= 0 ? "Actualizar" : "Guardar"; clicked => { root.guardar-finanza(); } }
                             Text { text: root.mensaje-finanza; color: #a0a0c0; font-size: 12px; vertical-alignment: center; }
@@ -646,11 +718,16 @@ export component AppWindow inherits Window {
                         padding: 12px;
                         spacing: 4px;
                         CampoTexto { etiqueta: "Cod. Inmueble"; valor <=> root.captacion-cod-inmueble; }
-                        CampoTexto { etiqueta: "Tipo Propiedad"; valor <=> root.captacion-tipo-propiedad; }
+                        CampoSelector { etiqueta: "Tipo de propiedad"; opciones: ["Casa", "Apartamento", "Local Comercial", "Terreno", "Galpón", "Oficina"]; valor <=> root.captacion-tipo-propiedad; }
                         CampoTexto { etiqueta: "ID Captador"; valor <=> root.captacion-id-captador; }
-                        CampoTexto { etiqueta: "Fecha (YYYY-MM-DD)"; valor <=> root.captacion-fecha; }
-                        CampoTexto { etiqueta: "Precio Lista"; valor <=> root.captacion-precio; }
-                        CampoTexto { etiqueta: "Estatus"; valor <=> root.captacion-estatus; }
+                        CampoFecha {
+                            etiqueta: "Fecha de captación";
+                            dia <=> root.captacion-fecha-dia;
+                            mes <=> root.captacion-fecha-mes;
+                            anio <=> root.captacion-fecha-anio;
+                        }
+                        CampoNumero { etiqueta: "Precio Lista"; valor <=> root.captacion-precio; }
+                        CampoSelector { etiqueta: "Estatus"; opciones: ["Disponible", "Cerrado", "Reservado", "Retirado"]; valor <=> root.captacion-estatus; }
                         HorizontalBox {
                             spacing: 16px;
                             CampoCheck { etiqueta: "Publicado Web"; valor <=> root.captacion-web; }
@@ -705,11 +782,11 @@ export component AppWindow inherits Window {
                         CampoTexto { etiqueta: "Propietario"; valor <=> root.reporte-propietario; }
                         CampoTexto { etiqueta: "Teléfono"; valor <=> root.reporte-telefono; }
                         CampoTexto { etiqueta: "ID Asesor"; valor <=> root.reporte-id-asesor; }
-                        CampoTexto { etiqueta: "Visitas agendadas"; valor <=> root.reporte-visitas; }
-                        CampoTexto { etiqueta: "Ofertas recibidas"; valor <=> root.reporte-ofertas; }
+                        CampoNumero { etiqueta: "Visitas agendadas"; valor <=> root.reporte-visitas; }
+                        CampoNumero { etiqueta: "Ofertas recibidas"; valor <=> root.reporte-ofertas; }
                         CampoTexto { etiqueta: "Canales publicación"; valor <=> root.reporte-canales; }
                         CampoTexto { etiqueta: "Notas"; valor <=> root.reporte-notas; }
-                        CampoTexto { etiqueta: "Estatus envío"; valor <=> root.reporte-estatus-envio; }
+                        CampoSelector { etiqueta: "Estatus envío"; opciones: ["ENVIADO", "PENDIENTE"]; valor <=> root.reporte-estatus-envio; }
                         HorizontalBox {
                             Button { text: root.reporte-editando >= 0 ? "Actualizar" : "Guardar"; clicked => { root.guardar-reporte(); } }
                             Text { text: root.mensaje-reporte; color: #a0a0c0; font-size: 12px; vertical-alignment: center; }
