@@ -4,6 +4,13 @@ export struct Fila {
     celdas: [string],
 }
 
+// Par id+nombre de un asesor, usado por CampoAsesor para el autocompletado
+// (buscar por nombre o por ID y mostrar sugerencias).
+export struct AsesorOpcion {
+    id: string,
+    nombre: string,
+}
+
 component KpiCard inherits Rectangle {
     in property <string> etiqueta;
     in property <string> valor;
@@ -26,7 +33,17 @@ component TablaGenerica inherits Rectangle {
 
     // Confirmacion de borrado: primer toque arma, segundo toque confirma.
     property <int> fila-a-confirmar: -1;
-    changed rows => { root.fila-a-confirmar = -1; }
+    // Fila "fijada" por un toque (para pantallas tactiles, sin hover).
+    // -1 = ninguna fijada a mano; el detalle tambien aparece solo con hover.
+    property <int> fila-fijada: -1;
+    changed rows => { root.fila-a-confirmar = -1; root.fila-fijada = -1; }
+
+    // Ancho de columna COMPARTIDO por el header y todas las filas: es lo
+    // que garantiza que todo quede alineado en columnas prolijas en vez de
+    // que cada fila calcule su propio ancho segun su propio contenido (eso
+    // era lo que antes generaba el desalineado / cosas empujadas de mas
+    // hacia la derecha). 138px = 60px (boton Editar) + 78px (boton Eliminar).
+    property <length> ancho-columna: (root.width - 138px - 24px) / max(1, root.headers.length);
 
     VerticalBox {
         padding: 0px;
@@ -34,13 +51,16 @@ component TablaGenerica inherits Rectangle {
 
         HorizontalBox {
             padding: 6px;
+            spacing: 0px;
             for h in root.headers: Text {
                 text: h;
+                width: root.ancho-columna;
+                horizontal-stretch: 0;
                 font-size: 12px;
                 font-weight: 700;
                 color: #a0a0c0;
-                horizontal-stretch: 1;
                 overflow: elide;
+                wrap: no-wrap;
             }
             Text { text: ""; width: 60px; }
             Text { text: ""; width: 78px; }
@@ -51,34 +71,76 @@ component TablaGenerica inherits Rectangle {
         ScrollView {
             VerticalBox {
                 padding: 0px;
-                spacing: 0px;
+                spacing: 2px;
                 alignment: start;
-                for fila[i] in root.rows: Rectangle {
-                    height: 34px;
-                    vertical-stretch: 0;
-                    background: mod(i, 2) == 0 ? #1a1a26 : transparent;
-                    HorizontalBox {
-                        padding: 6px;
-                        for celda in fila.celdas: Text {
-                            text: celda;
-                            font-size: 12px;
-                            color: #e0e0f0;
-                            horizontal-stretch: 1;
-                            vertical-alignment: center;
-                            overflow: elide;
-                        }
-                        Button { text: "Editar"; width: 60px; vertical-stretch: 0; clicked => { root.editar(i); } }
-                        Button {
-                            text: root.fila-a-confirmar == i ? "¿Seguro?" : "Eliminar";
-                            width: 78px;
-                            vertical-stretch: 0;
+                for fila[i] in root.rows: VerticalBox {
+                    padding: 0px;
+                    spacing: 0px;
+
+                    Rectangle {
+                        height: 34px;
+                        vertical-stretch: 0;
+                        background: mod(i, 2) == 0 ? #1a1a26 : transparent;
+
+                        // Area invisible detras de todo: capta hover (mouse)
+                        // y toque, pero los botones de arriba siguen
+                        // funcionando normal porque ellos reciben el click
+                        // primero al estar dibujados encima.
+                        toque-fila := TouchArea {
                             clicked => {
-                                if root.fila-a-confirmar == i {
-                                    root.fila-a-confirmar = -1;
-                                    root.eliminar(i);
-                                } else {
-                                    root.fila-a-confirmar = i;
+                                root.fila-fijada = root.fila-fijada == i ? -1 : i;
+                            }
+                        }
+
+                        HorizontalBox {
+                            padding: 6px;
+                            spacing: 0px;
+                            for celda in fila.celdas: Text {
+                                text: celda;
+                                width: root.ancho-columna;
+                                horizontal-stretch: 0;
+                                font-size: 12px;
+                                color: #e0e0f0;
+                                vertical-alignment: center;
+                                overflow: elide;
+                                wrap: no-wrap;
+                            }
+                            Button { text: "Editar"; width: 60px; vertical-stretch: 0; clicked => { root.editar(i); } }
+                            Button {
+                                text: root.fila-a-confirmar == i ? "¿Seguro?" : "Eliminar";
+                                width: 78px;
+                                vertical-stretch: 0;
+                                clicked => {
+                                    if root.fila-a-confirmar == i {
+                                        root.fila-a-confirmar = -1;
+                                        root.eliminar(i);
+                                    } else {
+                                        root.fila-a-confirmar = i;
+                                    }
                                 }
+                            }
+                        }
+                    }
+
+                    // Cuadro de detalle: se muestra al pasar el mouse por
+                    // encima de la fila (has-hover, en desktop) o al
+                    // tocarla (fila-fijada, en pantallas tactiles). Muestra
+                    // cada columna completa sin recortar, util cuando un
+                    // nombre largo u otro dato queda cortado en la vista
+                    // general de la tabla.
+                    if toque-fila.has-hover || root.fila-fijada == i: Rectangle {
+                        background: #23233a;
+                        border-radius: 6px;
+                        border-width: 1px;
+                        border-color: #3a3a55;
+                        VerticalBox {
+                            padding: 8px;
+                            spacing: 2px;
+                            for h[idx] in root.headers: Text {
+                                text: h + ": " + fila.celdas[idx];
+                                font-size: 12px;
+                                color: #e0e0f0;
+                                wrap: word-wrap;
                             }
                         }
                     }
@@ -167,6 +229,129 @@ component CampoFecha inherits HorizontalBox {
     Rectangle { horizontal-stretch: 1; }
 }
 
+// Campo para elegir un asesor (id_captador / id_cerrador / etc). Se puede
+// escribir el nombre O el ID: a medida que se tipea aparece una lista de
+// sugerencias debajo (nombre + ID) y al tocar una se completa el campo con
+// el ID correcto. El valor que queda guardado en "valor" sigue siendo
+// siempre el ID (igual que antes), asi que del lado de Rust no cambia nada
+// del guardado/validacion: esto solo mejora la forma de cargar el dato.
+component CampoAsesor inherits Rectangle {
+    in property <string> etiqueta;
+    in-out property <string> valor <=> entrada.text;
+    // Lista completa de asesores (id + nombre), para poder mostrar el
+    // nombre resuelto debajo del campo apenas el ID coincide con alguno.
+    in property <[AsesorOpcion]> opciones;
+    // Busqueda por texto parcial (nombre o ID); la logica de filtrado vive
+    // en Rust porque el lenguaje .slint no tiene "contains" de strings.
+    callback buscar(string) -> [AsesorOpcion];
+
+    property <[AsesorOpcion]> sugerencias: [];
+    property <bool> mostrar-sugerencias: false;
+
+    pure function nombre-resuelto() -> string {
+        for a in root.opciones {
+            if a.id == root.valor {
+                return a.nombre;
+            }
+        }
+        return "";
+    }
+
+    VerticalBox {
+        padding: 0px;
+        spacing: 2px;
+
+        HorizontalBox {
+            height: 32px;
+            padding: 0px;
+            spacing: 4px;
+            Text { text: root.etiqueta; width: 130px; color: #a0a0c0; font-size: 12px; vertical-alignment: center; }
+            entrada := LineEdit {
+                horizontal-stretch: 1;
+                placeholder-text: "Nombre o ID del asesor...";
+                edited(texto) => {
+                    if texto == "" {
+                        root.sugerencias = [];
+                        root.mostrar-sugerencias = false;
+                    } else {
+                        root.sugerencias = root.buscar(texto);
+                        root.mostrar-sugerencias = root.sugerencias.length > 0;
+                    }
+                }
+            }
+        }
+
+        if root.valor != "" && root.nombre-resuelto() != "": HorizontalBox {
+            padding: 0px;
+            spacing: 0px;
+            Rectangle { width: 134px; }
+            Text {
+                text: "✓ " + root.nombre-resuelto();
+                font-size: 11px;
+                color: #6ee7a0;
+            }
+        }
+        if root.valor != "" && root.nombre-resuelto() == "" && !root.mostrar-sugerencias: HorizontalBox {
+            padding: 0px;
+            spacing: 0px;
+            Rectangle { width: 134px; }
+            Text {
+                text: "No coincide con ningún ID de BD Asesores todavía";
+                font-size: 11px;
+                color: #e0a05a;
+            }
+        }
+
+        if root.mostrar-sugerencias: HorizontalBox {
+            padding: 0px;
+            spacing: 0px;
+            Rectangle { width: 134px; }
+            Rectangle {
+            background: #20202f;
+            border-radius: 6px;
+            border-width: 1px;
+            border-color: #33334d;
+            VerticalBox {
+                padding: 4px;
+                spacing: 0px;
+                for op in root.sugerencias: fila-sug := TouchArea {
+                    height: 28px;
+                    mouse-cursor: pointer;
+                    clicked => {
+                        root.valor = op.id;
+                        root.mostrar-sugerencias = false;
+                        root.sugerencias = [];
+                    }
+                    Rectangle {
+                        background: fila-sug.has-hover ? #2a2a40 : transparent;
+                        border-radius: 4px;
+                        Text {
+                            text: op.nombre + "   ·   " + op.id;
+                            color: #e0e0f0;
+                            font-size: 12px;
+                            vertical-alignment: center;
+                            x: 6px;
+                        }
+                    }
+                }
+                cerrar-sug := TouchArea {
+                    height: 20px;
+                    mouse-cursor: pointer;
+                    clicked => { root.mostrar-sugerencias = false; }
+                    Text {
+                        text: "Cerrar sugerencias";
+                        color: #7070a0;
+                        font-size: 11px;
+                        horizontal-alignment: right;
+                        width: 100%;
+                    }
+                }
+            }
+        }
+    }
+    }
+}
+
 export component AppWindow inherits Window {
     title: "InmoCore Analytics Pro";
     preferred-width: 1050px;
@@ -188,6 +373,10 @@ export component AppWindow inherits Window {
     in property <[Fila]> asesores-rows;
     callback actualizar-asesores();
     callback eliminar-asesor(int);
+
+    // --- autocompletado por nombre/ID en los campos de asesor ---
+    in property <[AsesorOpcion]> asesores-opciones;
+    callback buscar-asesores(string) -> [AsesorOpcion];
 
     // --- alta: Asesor ---
     in-out property <bool> mostrar-form-asesor: false;
@@ -469,7 +658,12 @@ export component AppWindow inherits Window {
                         spacing: 4px;
                         CampoTexto { etiqueta: "ID (ej. REQ-004)"; valor <=> root.matching-id; }
                         CampoTexto { etiqueta: "Cliente buscador"; valor <=> root.matching-cliente; }
-                        CampoTexto { etiqueta: "ID Asesor cliente"; valor <=> root.matching-asesor; }
+                        CampoAsesor {
+                            etiqueta: "ID Asesor cliente";
+                            valor <=> root.matching-asesor;
+                            opciones: root.asesores-opciones;
+                            buscar(t) => { return root.buscar-asesores(t); }
+                        }
                         CampoSelector { etiqueta: "Tipo de operación"; opciones: ["Venta", "Alquiler"]; valor <=> root.matching-tipo-operacion; }
                         CampoTexto { etiqueta: "Zona deseada"; valor <=> root.matching-zona; }
                         CampoNumero { etiqueta: "Presupuesto máx."; valor <=> root.matching-presupuesto; }
@@ -572,7 +766,12 @@ export component AppWindow inherits Window {
                     VerticalBox {
                         padding: 12px;
                         spacing: 4px;
-                        CampoTexto { etiqueta: "ID Asesor"; valor <=> root.embudo-id-asesor; }
+                        CampoAsesor {
+                            etiqueta: "ID Asesor";
+                            valor <=> root.embudo-id-asesor;
+                            opciones: root.asesores-opciones;
+                            buscar(t) => { return root.buscar-asesores(t); }
+                        }
                         CampoTexto { etiqueta: "Nombre asesor"; valor <=> root.embudo-nombre-asesor; }
                         CampoNumero { etiqueta: "Llamadas realizadas"; valor <=> root.embudo-llamadas; }
                         CampoNumero { etiqueta: "Citas captación"; valor <=> root.embudo-citas; }
@@ -627,8 +826,18 @@ export component AppWindow inherits Window {
                         CampoTexto { etiqueta: "Cod. Inmueble"; valor <=> root.cierre-cod-inmueble; }
                         CampoSelector { etiqueta: "Tipo de operación"; opciones: ["Venta", "Alquiler"]; valor <=> root.cierre-tipo-operacion; }
                         CampoNumero { etiqueta: "Monto operación"; valor <=> root.cierre-monto; }
-                        CampoTexto { etiqueta: "ID Captador"; valor <=> root.cierre-id-captador; }
-                        CampoTexto { etiqueta: "ID Cerrador"; valor <=> root.cierre-id-cerrador; }
+                        CampoAsesor {
+                            etiqueta: "ID Captador";
+                            valor <=> root.cierre-id-captador;
+                            opciones: root.asesores-opciones;
+                            buscar(t) => { return root.buscar-asesores(t); }
+                        }
+                        CampoAsesor {
+                            etiqueta: "ID Cerrador";
+                            valor <=> root.cierre-id-cerrador;
+                            opciones: root.asesores-opciones;
+                            buscar(t) => { return root.buscar-asesores(t); }
+                        }
                         CampoNumero { etiqueta: "% Comisión (0.05 = 5%)"; valor <=> root.cierre-pct-comision; }
                         HorizontalBox {
                             Button { text: root.cierre-editando >= 0 ? "Actualizar" : "Guardar"; clicked => { root.guardar-cierre(); } }
@@ -726,7 +935,12 @@ export component AppWindow inherits Window {
                         spacing: 4px;
                         CampoTexto { etiqueta: "Cod. Inmueble"; valor <=> root.captacion-cod-inmueble; }
                         CampoSelector { etiqueta: "Tipo de propiedad"; opciones: ["Casa", "Apartamento", "Local Comercial", "Terreno", "Galpón", "Oficina"]; valor <=> root.captacion-tipo-propiedad; }
-                        CampoTexto { etiqueta: "ID Captador"; valor <=> root.captacion-id-captador; }
+                        CampoAsesor {
+                            etiqueta: "ID Captador";
+                            valor <=> root.captacion-id-captador;
+                            opciones: root.asesores-opciones;
+                            buscar(t) => { return root.buscar-asesores(t); }
+                        }
                         CampoFecha {
                             etiqueta: "Fecha de captación";
                             dia <=> root.captacion-fecha-dia;
@@ -788,7 +1002,12 @@ export component AppWindow inherits Window {
                         CampoTexto { etiqueta: "Cod. Inmueble"; valor <=> root.reporte-cod-inmueble; }
                         CampoTexto { etiqueta: "Propietario"; valor <=> root.reporte-propietario; }
                         CampoTexto { etiqueta: "Teléfono"; valor <=> root.reporte-telefono; }
-                        CampoTexto { etiqueta: "ID Asesor"; valor <=> root.reporte-id-asesor; }
+                        CampoAsesor {
+                            etiqueta: "ID Asesor";
+                            valor <=> root.reporte-id-asesor;
+                            opciones: root.asesores-opciones;
+                            buscar(t) => { return root.buscar-asesores(t); }
+                        }
                         CampoNumero { etiqueta: "Visitas agendadas"; valor <=> root.reporte-visitas; }
                         CampoNumero { etiqueta: "Ofertas recibidas"; valor <=> root.reporte-ofertas; }
                         CampoTexto { etiqueta: "Canales publicación"; valor <=> root.reporte-canales; }

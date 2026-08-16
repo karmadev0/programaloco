@@ -146,6 +146,19 @@ fn cargar_asesores(v: &AppWindow) {
         })
         .collect();
     v.set_asesores_rows(filas_modelo(filas));
+
+    // Lista simple id+nombre para el autocompletado de CampoAsesor (ID
+    // Captador / ID Cerrador / ID Asesor, etc). Se refresca cada vez que se
+    // recarga BD Asesores, asi que siempre queda al dia.
+    let opciones: Vec<AsesorOpcion> = db
+        .asesores
+        .iter()
+        .map(|a| AsesorOpcion {
+            id: a.id.clone().into(),
+            nombre: a.nombre.clone().into(),
+        })
+        .collect();
+    v.set_asesores_opciones(ModelRc::new(VecModel::from(opciones)));
 }
 
 fn cargar_matching(v: &AppWindow) {
@@ -356,6 +369,33 @@ fn main() {
     conectar!(on_actualizar_finanzas, cargar_finanzas);
     conectar!(on_actualizar_captaciones, cargar_captaciones);
     conectar!(on_actualizar_reportes, cargar_reportes);
+
+    // Autocompletado: dado lo que se va tipeando en un campo "ID Captador"
+    // / "ID Cerrador" / etc, devuelve los asesores cuyo nombre o ID
+    // contienen ese texto (sin importar mayus/minus). El filtrado se hace
+    // aca porque el lenguaje .slint no tiene una funcion "contains" para
+    // strings.
+    v.on_buscar_asesores(move |texto| {
+        let db = data::cargar();
+        let t = texto.trim().to_lowercase();
+        if t.is_empty() {
+            return ModelRc::new(VecModel::from(Vec::<AsesorOpcion>::new()));
+        }
+        let mut coincidencias: Vec<AsesorOpcion> = db
+            .asesores
+            .iter()
+            .filter(|a| {
+                a.nombre.to_lowercase().contains(&t) || a.id.to_lowercase().contains(&t)
+            })
+            .map(|a| AsesorOpcion {
+                id: a.id.clone().into(),
+                nombre: a.nombre.clone().into(),
+            })
+            .collect();
+        coincidencias.sort_by(|a, b| a.nombre.cmp(&b.nombre));
+        coincidencias.truncate(8);
+        ModelRc::new(VecModel::from(coincidencias))
+    });
 
     // --- "Nuevo X": limpia el form y el indice de edicion antes de abrir,
     // asi nunca se pisa un registro existente por error.
