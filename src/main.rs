@@ -30,6 +30,9 @@ fn resolver_data_dir() -> PathBuf {
 }
 
 fn dinero(v: f64) -> String {
+    // Normaliza -0.0 -> 0.0 para que nunca se muestre "-0.00" (el signo de
+    // cero negativo de punto flotante no tiene significado para el usuario).
+    let v = if v == 0.0 { 0.0 } else { v };
     format!("${:.2}", v)
 }
 
