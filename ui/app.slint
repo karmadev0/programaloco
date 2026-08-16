@@ -246,12 +246,25 @@ component CampoAsesor inherits Rectangle {
     callback buscar(string) -> [AsesorOpcion];
     // Resuelve el nombre del asesor a partir del ID guardado en "valor".
     // Igual que "buscar", esta logica vive en Rust porque .slint no permite
-    // bucles imperativos (for/return) dentro de una function.
+    // bucles imperativos (for/return) dentro de una function. Ojo: no se
+    // puede bindear directo a una property (Slint no permite llamar un
+    // callback, que es impuro, desde un binding), asi que se llama a mano
+    // en "changed valor" / "changed opciones" y se guarda el resultado.
     callback resolver-nombre(string) -> string;
 
     property <[AsesorOpcion]> sugerencias: [];
     property <bool> mostrar-sugerencias: false;
-    property <string> nombre-resuelto-actual: root.valor == "" ? "" : root.resolver-nombre(root.valor);
+    property <string> nombre-resuelto-actual: "";
+
+    init => {
+        root.nombre-resuelto-actual = root.valor == "" ? "" : root.resolver-nombre(root.valor);
+    }
+    changed valor => {
+        root.nombre-resuelto-actual = root.valor == "" ? "" : root.resolver-nombre(root.valor);
+    }
+    changed opciones => {
+        root.nombre-resuelto-actual = root.valor == "" ? "" : root.resolver-nombre(root.valor);
+    }
 
     VerticalBox {
         padding: 0px;
