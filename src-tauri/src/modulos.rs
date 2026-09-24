@@ -561,6 +561,9 @@ pub fn consultar_guardia(db: &Database, fecha: &str) -> String {
 /// Campos del formulario. idx = None -> "Nuevo"; Some(i) -> editar la fila i mostrada.
 pub fn campos(db: &Database, m: i32, idx: Option<usize>) -> Result<Vec<CampoForm>, String> {
     let asesores = nombres_cortos(db);
+    if asesores.is_empty() && matches!(m, M_NEGOCIOS | M_INVENTARIO | M_CRM) {
+        return Err("Primero registra al menos un asesor (pestaña Asesores).".to_string());
+    }
     match m {
         M_NEGOCIOS => {
             let n = match idx {

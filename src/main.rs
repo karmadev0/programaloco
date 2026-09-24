@@ -34,6 +34,7 @@ fn resolver_data_dir() -> PathBuf {
 }
 
 const PANTALLA_AYUDA: i32 = 12;
+const PANTALLA_DATOS: i32 = 13;
 
 // ---------------------------------------------------------------------
 // Conversiones a modelos de Slint
@@ -113,8 +114,22 @@ fn cargar_vista(v: &AppWindow, m: i32) {
     v.set_mensaje("".into());
 }
 
+fn cargar_datos(v: &AppWindow) {
+    v.set_modo_demo(data::es_demo());
+    v.set_datos_info(
+        format!(
+            "Modo actual: {}\nCarpeta de datos: {}",
+            if data::es_demo() { "DEMO (datos de ejemplo)" } else { "REAL" },
+            data::carpeta_datos()
+        )
+        .into(),
+    );
+    v.set_datos_msg("".into());
+}
+
 fn cargar_pantalla(v: &AppWindow, m: i32) {
     match m {
+        PANTALLA_DATOS => cargar_datos(v),
         M_DASHBOARD => cargar_dashboard(v),
         M_GRAFICOS => cargar_graficos(v),
         PANTALLA_AYUDA => {}
@@ -146,7 +161,56 @@ fn main() {
     let v = AppWindow::new().expect("no se pudo crear la ventana");
     let estado = Rc::new(RefCell::new(Estado { modulo: M_DASHBOARD, editando: None, valores: vec![] }));
 
+    v.set_modo_demo(data::es_demo());
     cargar_dashboard(&v);
+
+    // --- modo Demo / Real ---
+    {
+        let debil = v.as_weak();
+        let est = estado.clone();
+        v.on_cambiar_modo(move || {
+            if let Some(v) = debil.upgrade() {
+                data::set_demo(!data::es_demo());
+                v.set_modo_demo(data::es_demo());
+                est.borrow_mut().modulo = M_DASHBOARD;
+                v.set_pantalla(M_DASHBOARD);
+                v.set_mostrar_form(false);
+                cargar_dashboard(&v);
+            }
+        });
+    }
+
+    // --- respaldo / importacion / vaciado ---
+    {
+        let debil = v.as_weak();
+        v.on_exportar_datos(move |ruta| {
+            if let Some(v) = debil.upgrade() {
+                let r = data::exportar(ruta.as_str());
+                v.set_datos_msg(r.unwrap_or_else(|e| format!("Error: {}", e)).into());
+            }
+        });
+        let debil = v.as_weak();
+        v.on_importar_datos(move |ruta| {
+            if let Some(v) = debil.upgrade() {
+                let r = data::importar(ruta.as_str());
+                v.set_datos_msg(r.unwrap_or_else(|e| format!("Error: {}", e)).into());
+            }
+        });
+        let debil = v.as_weak();
+        v.on_vaciar_datos(move || {
+            if let Some(v) = debil.upgrade() {
+                let r = data::vaciar();
+                v.set_datos_msg(r.unwrap_or_else(|e| format!("Error: {}", e)).into());
+            }
+        });
+        let debil = v.as_weak();
+        v.on_restaurar_demo(move || {
+            if let Some(v) = debil.upgrade() {
+                let r = data::restaurar_demo();
+                v.set_datos_msg(r.unwrap_or_else(|e| format!("Error: {}", e)).into());
+            }
+        });
+    }
 
     // --- navegacion ---
     {

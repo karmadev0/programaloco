@@ -194,13 +194,14 @@ component TarjetaAyuda inherits Rectangle {
 }
 
 export component AppWindow inherits Window {
-    title: "InmoCore — KAVELA Servicios Inmobiliarios";
+    title: root.modo-demo ? "InmoCore — KAVELA [MODO DEMO]" : "InmoCore — KAVELA Servicios Inmobiliarios";
     preferred-width: 1180px;
     preferred-height: 740px;
     background: #12121c;
 
     // 0=Dashboard 1=Negocios 2=Asesores 3=Mensualidad 4=Finanzas 5=Inventario 6=CRM
     // 7=Guardia 8=TOP Mensual 9=Rankings 10=Configuracion 11=Graficos 12=Ayuda
+    // 13=Datos y respaldo
     in-out property <int> pantalla: 0;
     callback ir-a(int);
 
@@ -240,6 +241,19 @@ export component AppWindow inherits Window {
     // --- Graficos ---
     in property <[Grafico]> graficos;
 
+    // --- Modo Demo / Real y respaldo de datos ---
+    in property <bool> modo-demo;
+    in property <string> datos-info;
+    in property <string> datos-msg;
+    callback cambiar-modo();
+    callback exportar-datos(string);
+    callback importar-datos(string);
+    callback vaciar-datos();
+    callback restaurar-demo();
+    // Boton "armado" (primer toque pide confirmar, segundo ejecuta): "", "importar", "vaciar", "demo"
+    property <string> armado: "";
+    changed pantalla => { root.armado = ""; }
+
     HorizontalLayout {
         Rectangle {
             width: 200px;
@@ -263,10 +277,25 @@ export component AppWindow inherits Window {
                 NavButton { etiqueta: "Rankings"; activo: root.pantalla == 9; clicked => { root.ir-a(9); } }
                 NavButton { etiqueta: "Gráficos"; activo: root.pantalla == 11; clicked => { root.ir-a(11); } }
                 NavButton { etiqueta: "Configuración"; activo: root.pantalla == 10; clicked => { root.ir-a(10); } }
+                NavButton { etiqueta: "Datos y respaldo"; activo: root.pantalla == 13; clicked => { root.ir-a(13); } }
                 NavButton { etiqueta: "Ayuda"; activo: root.pantalla == 12; clicked => { root.ir-a(12); } }
+                Rectangle { height: 6px; }
+                Rectangle {
+                    height: 22px;
+                    border-radius: 4px;
+                    background: root.modo-demo ? #b45309 : #14532d;
+                    Text { text: root.modo-demo ? "MODO DEMO" : "MODO REAL"; color: #ffffff; font-size: 11px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
+                }
+                NavButton { etiqueta: root.modo-demo ? "Pasar a modo Real" : "Pasar a modo Demo"; activo: false; clicked => { root.cambiar-modo(); } }
             }
         }
 
+        VerticalLayout {
+            if root.modo-demo: Rectangle {
+                height: 26px;
+                background: #b45309;
+                Text { text: "MODO DEMO — datos de ejemplo. No afectan tus datos reales."; color: #ffffff; font-size: 12px; font-weight: 700; horizontal-alignment: center; vertical-alignment: center; }
+            }
         Rectangle {
             // --- 0: Dashboard ---
             if root.pantalla == 0: VerticalBox {
@@ -356,8 +385,47 @@ export component AppWindow inherits Window {
                 }
             }
 
+            // --- 13: Datos y respaldo ---
+            if root.pantalla == 13: VerticalBox {
+                padding: 20px;
+                spacing: 10px;
+                alignment: start;
+                Text { text: "Datos y respaldo"; font-size: 22px; font-weight: 700; color: #ffffff; }
+                Text { text: root.datos-info; font-size: 12px; color: #a0a0c0; wrap: word-wrap; }
+                TarjetaAyuda {
+                    titulo: "Modo Real y modo Demo";
+                    para-que-sirve: "Real: tus datos verdaderos (empieza en blanco). Demo: datos de ejemplo del Excel para probar sin miedo. Cada modo guarda en su propia carpeta; cambiar de modo (botón abajo a la izquierda) nunca mezcla ni borra nada.";
+                }
+                Text { text: "Carpeta de respaldo (donde guardar o de donde importar los CSV):"; font-size: 12px; color: #a0a0c0; }
+                ruta-respaldo := LineEdit { placeholder-text: "Ej. C:\\Respaldos\\inmocore   o   /home/usuario/respaldo"; }
+                HorizontalBox {
+                    spacing: 8px;
+                    alignment: start;
+                    Button { text: "Exportar respaldo"; primary: true; clicked => { root.armado = ""; root.exportar-datos(ruta-respaldo.text); } }
+                    Button {
+                        text: root.armado == "importar" ? "¿Seguro? (se respalda lo actual)" : "Importar respaldo";
+                        clicked => {
+                            if root.armado == "importar" { root.armado = ""; root.importar-datos(ruta-respaldo.text); } else { root.armado = "importar"; }
+                        }
+                    }
+                    Button {
+                        text: root.armado == "vaciar" ? "¿Seguro? (se respalda lo actual)" : "Vaciar todo (dejar en blanco)";
+                        clicked => {
+                            if root.armado == "vaciar" { root.armado = ""; root.vaciar-datos(); } else { root.armado = "vaciar"; }
+                        }
+                    }
+                    if root.modo-demo: Button {
+                        text: root.armado == "demo" ? "¿Seguro?" : "Restaurar datos de ejemplo";
+                        clicked => {
+                            if root.armado == "demo" { root.armado = ""; root.restaurar-demo(); } else { root.armado = "demo"; }
+                        }
+                    }
+                }
+                if root.datos-msg != "": Text { text: root.datos-msg; font-size: 13px; color: #6ee7a0; wrap: word-wrap; }
+            }
+
             // --- Pantalla generica ---
-            if root.pantalla != 0 && root.pantalla != 11 && root.pantalla != 12: VerticalBox {
+            if root.pantalla != 0 && root.pantalla != 11 && root.pantalla != 12 && root.pantalla != 13: VerticalBox {
                 padding: 20px;
                 spacing: 10px;
                 HorizontalBox {
@@ -422,6 +490,7 @@ export component AppWindow inherits Window {
                     eliminar(i) => { root.eliminar(i); }
                 }
             }
+        }
         }
     }
 }

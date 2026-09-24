@@ -2,14 +2,30 @@ import { invoke } from "@tauri-apps/api/core";
 
 // Modulos (mismos numeros que modulos.rs): 0 Dashboard, 1 Negocios, 2 Asesores,
 // 3 Mensualidad, 4 Finanzas, 5 Inventario, 6 CRM, 7 Guardia, 8 TOP Mensual,
-// 9 Rankings, 10 Configuracion, 11 Graficos, 12 Ayuda.
+// 9 Rankings, 10 Configuracion, 11 Graficos, 12 Ayuda, 13 Datos y respaldo.
 const M_GUARDIA = 7;
 
 const content = document.getElementById("content");
 const botones = document.querySelectorAll(".nav-btn");
 
 botones.forEach((btn) => {
-  btn.addEventListener("click", () => abrir(Number(btn.dataset.m)));
+  if (btn.dataset.m !== undefined) btn.addEventListener("click", () => abrir(Number(btn.dataset.m)));
+});
+
+// --- Modo Real / Demo ---
+async function pintarModo(modo) {
+  document.getElementById("banner-demo").hidden = !modo.demo;
+  const badge = document.getElementById("modo-badge");
+  badge.textContent = modo.demo ? "MODO DEMO" : "MODO REAL";
+  badge.className = "modo-badge " + (modo.demo ? "modo-demo" : "modo-real");
+  document.getElementById("btn-modo").textContent = modo.demo ? "Pasar a modo Real" : "Pasar a modo Demo";
+  document.title = modo.demo ? "InmoCore — KAVELA [MODO DEMO]" : "InmoCore — KAVELA Servicios Inmobiliarios";
+}
+
+document.getElementById("btn-modo").addEventListener("click", async () => {
+  const modo = await invoke("cambiar_modo");
+  await pintarModo(modo);
+  abrir(0);
 });
 
 function marcarActivo(m) {
@@ -51,6 +67,7 @@ async function abrir(m, mensaje) {
     if (m === 0) await vistaDashboard();
     else if (m === 11) await vistaGraficos();
     else if (m === 12) vistaAyuda();
+    else if (m === 13) await vistaDatos();
     else await vistaGenerica(m, mensaje);
   } catch (err) {
     content.innerHTML = `<p class="mensaje-error">Error cargando la vista: ${esc(err)}</p>`;
@@ -214,6 +231,63 @@ async function vistaGraficos() {
       .join("");
 }
 
+async function vistaDatos() {
+  const modo = await invoke("get_modo");
+  content.innerHTML = `
+    <h2>Datos y respaldo</h2>
+    <p class="ayuda">Modo actual: <strong>${modo.demo ? "DEMO (datos de ejemplo)" : "REAL"}</strong><br>
+      Carpeta de datos: ${esc(modo.carpeta)}</p>
+    <div class="tarjeta"><h3>Modo Real y modo Demo</h3>
+      <p>Real: tus datos verdaderos (empieza en blanco). Demo: datos de ejemplo del Excel para probar sin miedo.
+      Cada modo guarda en su propia carpeta; cambiar de modo (botón abajo a la izquierda) nunca mezcla ni borra nada.</p></div>
+    <div id="msg"></div>
+    <div class="buscador" style="flex-direction:column;align-items:stretch">
+      <label>Carpeta de respaldo (donde guardar o de donde importar los CSV)
+        <input id="ruta" placeholder="Ej. C:\\Respaldos\\inmocore   o   /home/usuario/respaldo" /></label>
+      <div class="fila-botones">
+        <button class="btn" id="b-exportar">Exportar respaldo</button>
+        <button class="btn btn-secundario" id="b-importar">Importar respaldo</button>
+        <button class="btn btn-secundario" id="b-vaciar">Vaciar todo (dejar en blanco)</button>
+        ${modo.demo ? '<button class="btn btn-secundario" id="b-demo">Restaurar datos de ejemplo</button>' : ""}
+      </div>
+    </div>`;
+  const ruta = () => document.getElementById("ruta").value;
+  const mostrar = (msg, error) => (document.getElementById("msg").innerHTML = mensajeHtml(msg, error));
+  // Importar / vaciar / restaurar: primer toque arma, segundo confirma.
+  const confirmable = (id, textoOriginal, textoConfirmar, accion) => {
+    const b = document.getElementById(id);
+    if (!b) return;
+    b.addEventListener("click", async () => {
+      if (b.dataset.armado !== "1") {
+        b.dataset.armado = "1";
+        b.textContent = textoConfirmar;
+        return;
+      }
+      b.dataset.armado = "0";
+      b.textContent = textoOriginal;
+      try {
+        mostrar(await accion(), false);
+      } catch (err) {
+        mostrar(err, true);
+      }
+    });
+  };
+  document.getElementById("b-exportar").addEventListener("click", async () => {
+    try {
+      mostrar(await invoke("exportar_datos", { ruta: ruta() }), false);
+    } catch (err) {
+      mostrar(err, true);
+    }
+  });
+  confirmable("b-importar", "Importar respaldo", "¿Seguro? (se respalda lo actual)", () =>
+    invoke("importar_datos", { ruta: ruta() })
+  );
+  confirmable("b-vaciar", "Vaciar todo (dejar en blanco)", "¿Seguro? (se respalda lo actual)", () =>
+    invoke("vaciar_datos")
+  );
+  confirmable("b-demo", "Restaurar datos de ejemplo", "¿Seguro?", () => invoke("restaurar_demo"));
+}
+
 function vistaAyuda() {
   const tarjeta = (t, p) => `<div class="tarjeta"><h3>${t}</h3><p>${p}</p></div>`;
   content.innerHTML =
@@ -245,4 +319,4 @@ function vistaAyuda() {
 }
 
 // Pantalla inicial
-abrir(0);
+invoke("get_modo").then(pintarModo).finally(() => abrir(0));

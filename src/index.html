@@ -24,13 +24,20 @@
         <button class="nav-btn" data-m="9">Rankings</button>
         <button class="nav-btn" data-m="11">Gráficos</button>
         <button class="nav-btn" data-m="10">Configuración</button>
+        <button class="nav-btn" data-m="13">Datos y respaldo</button>
         <button class="nav-btn" data-m="12">Ayuda</button>
       </nav>
+
+      <div id="modo-badge" class="modo-badge modo-real">MODO REAL</div>
+      <button id="btn-modo" class="nav-btn">Pasar a modo Demo</button>
     </aside>
 
-    <main id="content" class="content">
-      <p class="cargando">Cargando…</p>
-    </main>
+    <div class="principal">
+      <div id="banner-demo" class="banner-demo" hidden>MODO DEMO — datos de ejemplo. No afectan tus datos reales.</div>
+      <main id="content" class="content">
+        <p class="cargando">Cargando…</p>
+      </main>
+    </div>
   </div>
 
   <script type="module" src="main.js"></script>

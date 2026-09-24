@@ -1,10 +1,14 @@
 // ============================================================================
 // data.rs
-// Carga y guarda cada hoja como un .csv dentro de <carpeta de datos>/kavela/.
+// Carga y guarda cada hoja como un .csv dentro de <carpeta de datos>/kavela/
+// (modo REAL, arranca en blanco) o <carpeta de datos>/kavela_demo/ (modo DEMO,
+// con los datos de ejemplo del Excel). El modo elegido se recuerda en modo.txt.
+// Respaldos: exportar / importar carpetas de CSV, con respaldo automatico previo
+// en <carpeta de datos>/respaldos/.
 // Formato CSV simple (sin comillas). Al guardar, las comas y saltos de linea
 // dentro de un campo se reemplazan (',' -> ';') para no romper el formato.
-// La PRIMERA vez que se abre la app (si no hay CSV) se cargan los datos
-// iniciales de seed.rs (tomados del Excel sistema_Kavela_1_1.xlsx).
+// La PRIMERA vez que se abre cada modo (si no hay CSV): REAL = en blanco,
+// DEMO = datos de ejemplo de seed.rs (tomados del Excel sistema_Kavela_1_1.xlsx).
 // Los CSV del sistema anterior (carpeta data/ sin "kavela/") no se tocan.
 // ============================================================================
 
@@ -13,20 +17,47 @@ use crate::seed;
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
 
 static BASE_DIR: OnceLock<PathBuf> = OnceLock::new();
+static DEMO: AtomicBool = AtomicBool::new(false);
+
+const ARCHIVOS: [&str; 7] =
+    ["asesores", "negocios", "mensualidad", "egresos", "inventario", "clientes", "guardia"];
 
 pub fn inicializar_dir(dir: PathBuf) {
     let _ = BASE_DIR.set(dir);
+    // Recupera el modo (real/demo) con el que se cerro la app la ultima vez.
+    let demo = fs::read_to_string(format!("{}/modo.txt", raiz())).map(|t| t.trim() == "demo").unwrap_or(false);
+    DEMO.store(demo, Ordering::Relaxed);
+}
+
+fn raiz() -> String {
+    match BASE_DIR.get() {
+        Some(p) => p.to_string_lossy().to_string(),
+        None => "data".to_string(),
+    }
+}
+
+pub fn es_demo() -> bool {
+    DEMO.load(Ordering::Relaxed)
+}
+
+/// Cambia de modo (y lo recuerda para la proxima vez que se abra la app).
+pub fn set_demo(demo: bool) {
+    DEMO.store(demo, Ordering::Relaxed);
+    let _ = fs::create_dir_all(raiz());
+    let _ = fs::write(format!("{}/modo.txt", raiz()), if demo { "demo" } else { "real" });
 }
 
 fn base_dir() -> String {
-    let base = match BASE_DIR.get() {
-        Some(p) => p.to_string_lossy().to_string(),
-        None => "data".to_string(),
-    };
-    format!("{}/kavela", base)
+    format!("{}/{}", raiz(), if es_demo() { "kavela_demo" } else { "kavela" })
+}
+
+/// Carpeta donde estan los CSV del modo actual (para mostrarla al usuario).
+pub fn carpeta_datos() -> String {
+    base_dir()
 }
 
 fn ruta(nombre: &str) -> String {
@@ -86,39 +117,146 @@ pub fn datos_existen() -> bool {
     fs::metadata(ruta("asesores")).is_ok()
 }
 
-/// Escribe los datos iniciales solo si nunca se guardo nada.
+fn demo_contenido(nombre: &str) -> &'static str {
+    match nombre {
+        "asesores" => seed::ASESORES,
+        "negocios" => seed::NEGOCIOS,
+        "mensualidad" => seed::MENSUALIDAD,
+        "egresos" => seed::EGRESOS,
+        "inventario" => seed::INVENTARIO,
+        "clientes" => seed::CLIENTES,
+        _ => seed::GUARDIA,
+    }
+}
+
+/// Archivo en blanco: solo el encabezado. La guardia queda con los 5 dias (sin abogado).
+fn vacio(nombre: &str) -> String {
+    let enc = demo_contenido(nombre).lines().next().unwrap_or("").to_string();
+    if nombre == "guardia" {
+        let dias: Vec<String> = crate::logic::DIAS_GUARDIA.iter().map(|d| format!("{},,,,,", d)).collect();
+        format!("{}\n{}\n", enc, dias.join("\n"))
+    } else {
+        format!("{}\n", enc)
+    }
+}
+
+fn contenido_inicial(nombre: &str) -> String {
+    if es_demo() { demo_contenido(nombre).to_string() } else { vacio(nombre) }
+}
+
+/// Escribe los datos iniciales del modo actual solo si nunca se guardo nada:
+/// REAL = en blanco, DEMO = datos de ejemplo.
 pub fn sembrar_si_hace_falta() {
     if datos_existen() {
         return;
     }
     let _ = fs::create_dir_all(base_dir());
-    for (nombre, contenido) in [
-        ("asesores", seed::ASESORES),
-        ("negocios", seed::NEGOCIOS),
-        ("mensualidad", seed::MENSUALIDAD),
-        ("egresos", seed::EGRESOS),
-        ("inventario", seed::INVENTARIO),
-        ("clientes", seed::CLIENTES),
-        ("guardia", seed::GUARDIA),
-    ] {
-        let _ = fs::write(ruta(nombre), contenido);
+    for nombre in ARCHIVOS {
+        let _ = fs::write(ruta(nombre), contenido_inicial(nombre));
     }
+}
+
+// ---------------------------------------------------------------------------
+// Respaldo, importacion, vaciado y reinicio de la demo
+// ---------------------------------------------------------------------------
+
+/// Copia los CSV actuales a <datos>/respaldos/<modo>_<fecha>_<n>/ y devuelve esa carpeta.
+pub fn respaldo_automatico() -> Result<String, String> {
+    sembrar_si_hace_falta();
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let dir = format!(
+        "{}/respaldos/{}_{}_{}",
+        raiz(),
+        if es_demo() { "demo" } else { "real" },
+        crate::logic::hoy_iso(),
+        secs % 86400
+    );
+    copiar_a(&dir)?;
+    Ok(dir)
+}
+
+fn copiar_a(destino: &str) -> Result<usize, String> {
+    fs::create_dir_all(destino).map_err(|e| format!("No se pudo crear '{}': {}", destino, e))?;
+    let mut n = 0;
+    for a in ARCHIVOS {
+        if fs::copy(ruta(a), format!("{}/{}.csv", destino, a)).is_ok() {
+            n += 1;
+        }
+    }
+    Ok(n)
+}
+
+/// Exporta los datos del modo actual a una carpeta elegida por el usuario.
+pub fn exportar(destino: &str) -> Result<String, String> {
+    let d = destino.trim().trim_matches('"');
+    if d.is_empty() {
+        return Err("Escribe la carpeta de destino.".into());
+    }
+    sembrar_si_hace_falta();
+    let n = copiar_a(d)?;
+    Ok(format!("Respaldo exportado: {} archivos en {}", n, d))
+}
+
+/// Importa una carpeta de CSV (un respaldo exportado por InmoCore) al modo actual.
+/// Antes hace un respaldo automatico de lo que hubiera. Acepta la carpeta con los CSV
+/// o una carpeta que contenga una subcarpeta "kavela".
+pub fn importar(origen: &str) -> Result<String, String> {
+    let o = origen.trim().trim_matches('"').trim_end_matches(['/', '\\']);
+    if o.is_empty() {
+        return Err("Escribe la carpeta que contiene los CSV a importar.".into());
+    }
+    let candidatas = [o.to_string(), format!("{}/kavela", o)];
+    let carpeta = candidatas
+        .iter()
+        .find(|c| fs::metadata(format!("{}/asesores.csv", c)).is_ok() && fs::metadata(format!("{}/negocios.csv", c)).is_ok())
+        .ok_or_else(|| "No encontré asesores.csv y negocios.csv en esa carpeta.".to_string())?
+        .clone();
+    // Validacion basica de encabezados: que sea un respaldo de InmoCore de verdad.
+    let enc = |a: &str| fs::read_to_string(format!("{}/{}.csv", carpeta, a)).unwrap_or_default();
+    if !enc("asesores").starts_with("codigo,") || !enc("negocios").starts_with("id,fecha,") {
+        return Err("Esos archivos no tienen el formato de InmoCore (encabezados distintos).".into());
+    }
+    let respaldo = respaldo_automatico()?;
+    let mut n = 0;
+    for a in ARCHIVOS {
+        let origen_f = format!("{}/{}.csv", carpeta, a);
+        if fs::copy(&origen_f, ruta(a)).is_ok() {
+            n += 1;
+        } else {
+            let _ = fs::write(ruta(a), vacio(a)); // archivo que falta en el respaldo: queda en blanco
+        }
+    }
+    Ok(format!("Importados {} archivos. Lo anterior quedó respaldado en {}", n, respaldo))
+}
+
+/// Deja el modo actual totalmente en blanco (con respaldo automatico previo).
+pub fn vaciar() -> Result<String, String> {
+    let respaldo = respaldo_automatico()?;
+    for a in ARCHIVOS {
+        fs::write(ruta(a), vacio(a)).map_err(|e| e.to_string())?;
+    }
+    Ok(format!("Datos vaciados. Respaldo previo en {}", respaldo))
+}
+
+/// Solo en modo DEMO: vuelve a cargar los datos de ejemplo.
+pub fn restaurar_demo() -> Result<String, String> {
+    if !es_demo() {
+        return Err("Esto solo está disponible en modo Demo.".into());
+    }
+    let _ = fs::create_dir_all(base_dir());
+    for a in ARCHIVOS {
+        fs::write(ruta(a), demo_contenido(a)).map_err(|e| e.to_string())?;
+    }
+    Ok("Datos de ejemplo restaurados.".into())
 }
 
 /// Base de datos con los datos iniciales del Excel (sin tocar el disco; la usan los tests).
 #[allow(dead_code)]
 pub fn desde_semilla() -> Database {
-    construir(&|nombre| {
-        parsear(match nombre {
-            "asesores" => seed::ASESORES,
-            "negocios" => seed::NEGOCIOS,
-            "mensualidad" => seed::MENSUALIDAD,
-            "egresos" => seed::EGRESOS,
-            "inventario" => seed::INVENTARIO,
-            "clientes" => seed::CLIENTES,
-            _ => seed::GUARDIA,
-        })
-    })
+    construir(&|nombre| parsear(demo_contenido(nombre)))
 }
 
 pub fn cargar() -> Database {

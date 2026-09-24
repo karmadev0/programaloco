@@ -118,19 +118,47 @@ fn t_crud_negocio_y_asesor() {
 }
 
 #[test]
-fn t_guardar_y_recargar() {
+fn t_modos_respaldo_e_importacion() {
+    // Un solo test para todo lo que toca disco (el modo es un estado global).
     INICIO.call_once(|| {
         let dir = std::env::temp_dir().join(format!("inmocore_test_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         data::inicializar_dir(dir);
     });
+    let tmp = std::env::temp_dir().join(format!("inmocore_exp_{}", std::process::id()));
+    let tmp = tmp.to_string_lossy().to_string();
+
+    // REAL: arranca totalmente en blanco y todo funciona sin datos
+    data::set_demo(false);
+    let real = data::cargar();
+    assert!(real.asesores.is_empty() && real.negocios.is_empty());
+    assert_eq!(real.guardia.len(), 5);
+    assert_eq!(calcular_dashboard(&real).total_negocios, 0);
+    assert_eq!(calcular_dashboard(&real).top_producer, "-");
+    assert!(campos(&real, M_NEGOCIOS, None).is_err()); // pide crear un asesor primero
+    assert!(data::restaurar_demo().is_err());
+
+    // DEMO: datos de ejemplo, en carpeta aparte
+    data::set_demo(true);
     let mut db = data::cargar();
+    assert_eq!((db.asesores.len(), db.negocios.len(), db.mensualidad.len()), (14, 22, 55));
     db.negocios.pop();
     data::guardar(&db).unwrap();
-    let otra = data::cargar();
-    assert_eq!(otra.negocios.len(), db.negocios.len());
-    assert_eq!(otra.asesores.len(), 14);
-    assert_eq!(otra.mensualidad.len(), 55);
+    assert_eq!(data::cargar().negocios.len(), 21);
+    data::set_demo(false);
+    assert!(data::cargar().negocios.is_empty()); // lo de la demo no toca lo real
+
+    // exportar -> vaciar -> importar
+    data::set_demo(true);
+    assert!(data::exportar(&tmp).is_ok());
+    assert!(data::vaciar().is_ok());
+    assert!(data::cargar().negocios.is_empty());
+    assert!(data::importar("/no/existe").is_err());
+    assert!(data::importar(&tmp).is_ok());
+    assert_eq!(data::cargar().negocios.len(), 21);
+    assert!(data::restaurar_demo().is_ok());
+    assert_eq!(data::cargar().negocios.len(), 22);
+    data::set_demo(false);
 }
 
 #[test]

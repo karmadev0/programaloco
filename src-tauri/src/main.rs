@@ -22,6 +22,53 @@ fn kpis_json(v: Vec<(String, String)>) -> serde_json::Value {
     json!(v.into_iter().map(|(e, val)| json!({ "etiqueta": e, "valor": val })).collect::<Vec<_>>())
 }
 
+// ---------------------------------------------------------------------
+// Modo Real / Demo y respaldo de datos
+// ---------------------------------------------------------------------
+
+fn modo_json() -> serde_json::Value {
+    json!({ "demo": data::es_demo(), "carpeta": data::carpeta_datos() })
+}
+
+#[tauri::command]
+fn get_modo() -> serde_json::Value {
+    modo_json()
+}
+
+/// Real <-> Demo. Cada modo tiene su propia carpeta: nunca se mezclan.
+#[tauri::command]
+fn cambiar_modo(state: State<AppState>) -> serde_json::Value {
+    data::set_demo(!data::es_demo());
+    *state.0.lock().unwrap() = data::cargar();
+    modo_json()
+}
+
+#[tauri::command]
+fn exportar_datos(ruta: String) -> Result<String, String> {
+    data::exportar(&ruta)
+}
+
+#[tauri::command]
+fn importar_datos(state: State<AppState>, ruta: String) -> Result<String, String> {
+    let msg = data::importar(&ruta)?;
+    *state.0.lock().unwrap() = data::cargar();
+    Ok(msg)
+}
+
+#[tauri::command]
+fn vaciar_datos(state: State<AppState>) -> Result<String, String> {
+    let msg = data::vaciar()?;
+    *state.0.lock().unwrap() = data::cargar();
+    Ok(msg)
+}
+
+#[tauri::command]
+fn restaurar_demo(state: State<AppState>) -> Result<String, String> {
+    let msg = data::restaurar_demo()?;
+    *state.0.lock().unwrap() = data::cargar();
+    Ok(msg)
+}
+
 #[tauri::command]
 fn get_dashboard(state: State<AppState>) -> serde_json::Value {
     let db = state.0.lock().unwrap();
@@ -133,6 +180,12 @@ fn main() {
             consultar_guardia,
             guardar_registro,
             eliminar_registro,
+            get_modo,
+            cambiar_modo,
+            exportar_datos,
+            importar_datos,
+            vaciar_datos,
+            restaurar_demo,
         ])
         .run(tauri::generate_context!())
         .expect("error al correr la app Tauri");

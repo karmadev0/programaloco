@@ -18,6 +18,14 @@ Dos interfaces con la MISMA lógica:
 `models.rs`, `data.rs`, `logic.rs`, `modulos.rs` y `seed.rs` están **duplicados** en `src/` y
 `src-tauri/src/` (idénticos). Si cambias uno, copia el cambio al otro.
 
+## Modo Real y modo Demo
+
+- **Real**: tus datos verdaderos. Arranca **en blanco** (solo la estructura) y guarda en `<datos>/kavela/`.
+- **Demo**: datos de ejemplo del Excel para probar sin miedo; guarda en `<datos>/kavela_demo/`.
+- Se cambia con el botón de abajo a la izquierda (el modo se recuerda al cerrar). Nunca se mezclan.
+- **Datos y respaldo**: exportar/importar carpetas de CSV, vaciar todo y restaurar la demo. Importar y vaciar
+  hacen antes un respaldo automático en `<datos>/respaldos/`.
+
 ## Verificación
 
 `cargo test` (en la raíz) comprueba que el programa da las mismas cifras que el Excel

@@ -602,6 +602,7 @@ pub fn abogado_de_guardia(db: &Database, fecha: &str) -> String {
         None => return "Fecha no válida (use AAAA-MM-DD o DD/MM/AAAA)".to_string(),
     };
     match db.guardia.iter().find(|g| normalizar(&g.dia) == normalizar(dia)) {
+        Some(g) if g.abogado.is_empty() => format!("{}: (sin abogado asignado)", dia),
         Some(g) => format!("{}: {}", dia, g.abogado),
         None => format!("{}: Fin de semana / no laborable", dia),
     }
