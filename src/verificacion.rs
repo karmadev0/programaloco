@@ -159,6 +159,48 @@ fn t_modos_respaldo_e_importacion() {
     assert!(data::restaurar_demo().is_ok());
     assert_eq!(data::cargar().negocios.len(), 22);
     data::set_demo(false);
+
+    // AISLAMIENTO: nada de lo que se haga en Demo puede tocar la carpeta del modo Real.
+    fn foto(dir: &str) -> Vec<(String, Vec<u8>)> {
+        let mut v: Vec<(String, Vec<u8>)> = std::fs::read_dir(dir)
+            .unwrap()
+            .map(|e| {
+                let p = e.unwrap().path();
+                (p.file_name().unwrap().to_string_lossy().to_string(), std::fs::read(&p).unwrap())
+            })
+            .collect();
+        v.sort();
+        v
+    }
+    let mut real = data::cargar();
+    real.asesores.push(Asesor {
+        codigo: "AS-001".into(), nombre_completo: "PRUEBA REAL".into(), nombre_corto: "Prueba Real".into(),
+        cedula: "1".into(), cargo: "Broker/Abg".into(), formato: 0.0, fecha_ingreso: String::new(), telefono: String::new(),
+    });
+    data::guardar(&real).unwrap();
+    let dir_real = data::carpeta_datos();
+    let antes = foto(&dir_real);
+
+    data::set_demo(true);
+    assert_ne!(data::carpeta_datos(), dir_real);
+    let mut demo = data::cargar();
+    assert_eq!(demo.asesores.len(), 14); // la demo no ve nada de lo real
+    demo.negocios.clear();
+    data::guardar(&demo).unwrap();
+    let tmp2 = format!("{}_2", tmp);
+    data::exportar(&tmp2).unwrap();
+    data::vaciar().unwrap();
+    data::importar(&tmp2).unwrap();
+    data::restaurar_demo().unwrap();
+
+    data::set_demo(false);
+    assert_eq!(foto(&dir_real), antes, "la demo modifico la carpeta del modo Real");
+    assert_eq!(data::cargar().asesores.len(), 1);
+    // los respaldos automaticos hechos desde la demo quedan marcados como demo
+    let raiz = std::path::Path::new(&dir_real).parent().unwrap().join("respaldos");
+    for e in std::fs::read_dir(raiz).unwrap() {
+        assert!(e.unwrap().file_name().to_string_lossy().starts_with("demo_"));
+    }
 }
 
 #[test]

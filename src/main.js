@@ -247,7 +247,7 @@ async function vistaDatos() {
       <div class="fila-botones">
         <button class="btn" id="b-exportar">Exportar respaldo</button>
         <button class="btn btn-secundario" id="b-importar">Importar respaldo</button>
-        <button class="btn btn-secundario" id="b-vaciar">Vaciar todo (dejar en blanco)</button>
+        <button class="btn btn-secundario" id="b-vaciar">Borrar todos los datos (empezar de cero)</button>
         ${modo.demo ? '<button class="btn btn-secundario" id="b-demo">Restaurar datos de ejemplo</button>' : ""}
       </div>
     </div>`;
@@ -282,7 +282,7 @@ async function vistaDatos() {
   confirmable("b-importar", "Importar respaldo", "¿Seguro? (se respalda lo actual)", () =>
     invoke("importar_datos", { ruta: ruta() })
   );
-  confirmable("b-vaciar", "Vaciar todo (dejar en blanco)", "¿Seguro? (se respalda lo actual)", () =>
+  confirmable("b-vaciar", "Borrar todos los datos (empezar de cero)", "¿Seguro? (se respalda lo actual)", () =>
     invoke("vaciar_datos")
   );
   confirmable("b-demo", "Restaurar datos de ejemplo", "¿Seguro?", () => invoke("restaurar_demo"));

@@ -409,7 +409,7 @@ export component AppWindow inherits Window {
                         }
                     }
                     Button {
-                        text: root.armado == "vaciar" ? "¿Seguro? (se respalda lo actual)" : "Vaciar todo (dejar en blanco)";
+                        text: root.armado == "vaciar" ? "¿Seguro? (se respalda lo actual)" : "Borrar todos los datos (empezar de cero)";
                         clicked => {
                             if root.armado == "vaciar" { root.armado = ""; root.vaciar-datos(); } else { root.armado = "vaciar"; }
                         }
