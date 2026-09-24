@@ -1,14 +1,31 @@
-import { Button, VerticalBox, HorizontalBox, ScrollView, LineEdit, CheckBox, ComboBox, SpinBox } from "std-widgets.slint";
+import { Button, VerticalBox, HorizontalBox, ScrollView, LineEdit, ComboBox } from "std-widgets.slint";
 
 export struct Fila {
     celdas: [string],
 }
 
-// Par id+nombre de un asesor, usado por CampoAsesor para el autocompletado
-// (buscar por nombre o por ID y mostrar sugerencias).
-export struct AsesorOpcion {
-    id: string,
-    nombre: string,
+// Un campo de formulario. "opciones" vacio = texto libre; con opciones = lista desplegable.
+export struct Campo {
+    etiqueta: string,
+    valor: string,
+    opciones: [string],
+}
+
+export struct Kpi {
+    etiqueta: string,
+    valor: string,
+}
+
+// valor: 0..1 (proporcion respecto a la barra mas larga); texto: lo que se muestra al lado.
+export struct Barra {
+    etiqueta: string,
+    valor: float,
+    texto: string,
+}
+
+export struct Grafico {
+    titulo: string,
+    barras: [Barra],
 }
 
 component KpiCard inherits Rectangle {
@@ -20,30 +37,32 @@ component KpiCard inherits Rectangle {
     border-color: #33334d;
     VerticalBox {
         alignment: center;
-        Text { text: root.valor; font-size: 26px; font-weight: 700; color: #ffffff; horizontal-alignment: center; }
-        Text { text: root.etiqueta; font-size: 13px; color: #a0a0c0; horizontal-alignment: center; wrap: word-wrap; }
+        Text { text: root.valor; font-size: 20px; font-weight: 700; color: #ffffff; horizontal-alignment: center; overflow: elide; }
+        Text { text: root.etiqueta; font-size: 12px; color: #a0a0c0; horizontal-alignment: center; wrap: word-wrap; }
     }
 }
 
+// Tabla generica. "visibles" = cuantas columnas caben en la fila; el resto de las
+// columnas solo aparece en el cuadro de detalle (pasar el mouse o tocar la fila).
 component TablaGenerica inherits Rectangle {
     in property <[string]> headers;
+    in property <int> visibles: -1;
     in property <[Fila]> rows;
+    in property <bool> puede-editar: true;
+    in property <bool> puede-eliminar: true;
     callback eliminar(int);
     callback editar(int);
 
     // Confirmacion de borrado: primer toque arma, segundo toque confirma.
     property <int> fila-a-confirmar: -1;
     // Fila "fijada" por un toque (para pantallas tactiles, sin hover).
-    // -1 = ninguna fijada a mano; el detalle tambien aparece solo con hover.
     property <int> fila-fijada: -1;
     changed rows => { root.fila-a-confirmar = -1; root.fila-fijada = -1; }
 
-    // Ancho de columna COMPARTIDO por el header y todas las filas: es lo
-    // que garantiza que todo quede alineado en columnas prolijas en vez de
-    // que cada fila calcule su propio ancho segun su propio contenido (eso
-    // era lo que antes generaba el desalineado / cosas empujadas de mas
-    // hacia la derecha). 138px = 60px (boton Editar) + 78px (boton Eliminar).
-    property <length> ancho-columna: (root.width - 138px - 24px) / max(1, root.headers.length);
+    property <int> n-cols: root.visibles < 0 ? root.headers.length : root.visibles;
+    property <length> ancho-botones: (root.puede-editar ? 60px : 0px) + (root.puede-eliminar ? 78px : 0px);
+    // Ancho de columna COMPARTIDO por el header y todas las filas (asi quedan alineadas).
+    property <length> ancho-columna: (root.width - root.ancho-botones - 24px) / max(1, root.n-cols);
 
     VerticalBox {
         padding: 0px;
@@ -52,9 +71,10 @@ component TablaGenerica inherits Rectangle {
         HorizontalBox {
             padding: 6px;
             spacing: 0px;
-            for h in root.headers: Text {
+            for h[hi] in root.headers: Text {
                 text: h;
-                width: root.ancho-columna;
+                visible: hi < root.n-cols;
+                width: hi < root.n-cols ? root.ancho-columna : 0px;
                 horizontal-stretch: 0;
                 font-size: 12px;
                 font-weight: 700;
@@ -62,8 +82,7 @@ component TablaGenerica inherits Rectangle {
                 overflow: elide;
                 wrap: no-wrap;
             }
-            Text { text: ""; width: 60px; }
-            Text { text: ""; width: 78px; }
+            Rectangle { width: root.ancho-botones; }
         }
 
         Rectangle { height: 1px; background: #33334d; }
@@ -82,10 +101,6 @@ component TablaGenerica inherits Rectangle {
                         vertical-stretch: 0;
                         background: mod(i, 2) == 0 ? #1a1a26 : transparent;
 
-                        // Area invisible detras de todo: capta hover (mouse)
-                        // y toque, pero los botones de arriba siguen
-                        // funcionando normal porque ellos reciben el click
-                        // primero al estar dibujados encima.
                         toque-fila := TouchArea {
                             clicked => {
                                 root.fila-fijada = root.fila-fijada == i ? -1 : i;
@@ -95,9 +110,10 @@ component TablaGenerica inherits Rectangle {
                         HorizontalBox {
                             padding: 6px;
                             spacing: 0px;
-                            for celda in fila.celdas: Text {
+                            for celda[ci] in fila.celdas: Text {
                                 text: celda;
-                                width: root.ancho-columna;
+                                visible: ci < root.n-cols;
+                                width: ci < root.n-cols ? root.ancho-columna : 0px;
                                 horizontal-stretch: 0;
                                 font-size: 12px;
                                 color: #e0e0f0;
@@ -105,8 +121,8 @@ component TablaGenerica inherits Rectangle {
                                 overflow: elide;
                                 wrap: no-wrap;
                             }
-                            Button { text: "Editar"; width: 60px; vertical-stretch: 0; clicked => { root.editar(i); } }
-                            Button {
+                            if root.puede-editar: Button { text: "Editar"; width: 60px; vertical-stretch: 0; clicked => { root.editar(i); } }
+                            if root.puede-eliminar: Button {
                                 text: root.fila-a-confirmar == i ? "¿Seguro?" : "Eliminar";
                                 width: 78px;
                                 vertical-stretch: 0;
@@ -122,12 +138,7 @@ component TablaGenerica inherits Rectangle {
                         }
                     }
 
-                    // Cuadro de detalle: se muestra al pasar el mouse por
-                    // encima de la fila (has-hover, en desktop) o al
-                    // tocarla (fila-fijada, en pantallas tactiles). Muestra
-                    // cada columna completa sin recortar, util cuando un
-                    // nombre largo u otro dato queda cortado en la vista
-                    // general de la tabla.
+                    // Detalle completo de la fila (hover en desktop / toque en pantallas tactiles).
                     if toque-fila.has-hover || root.fila-fijada == i: Rectangle {
                         background: #23233a;
                         border-radius: 6px;
@@ -154,7 +165,7 @@ component NavButton inherits Rectangle {
     in property <string> etiqueta;
     in property <bool> activo;
     callback clicked();
-    height: 38px;
+    height: 34px;
     background: root.activo ? #2a2a40 : transparent;
     border-radius: 6px;
     Text {
@@ -168,968 +179,247 @@ component NavButton inherits Rectangle {
     TouchArea { clicked => { root.clicked(); } }
 }
 
-// Tarjeta de la seccion Ayuda: nombre de la pestaña, para que sirve, y un
-// ejemplo concreto de uso. "ejemplo" es opcional (texto vacio = se omite).
+// Tarjeta de la seccion Ayuda.
 component TarjetaAyuda inherits Rectangle {
     in property <string> titulo;
     in property <string> para-que-sirve;
-    in property <string> ejemplo;
     background: #1a1a26;
     border-radius: 8px;
     VerticalBox {
-        padding: 16px;
-        spacing: 8px;
-        Text { text: root.titulo; font-size: 16px; font-weight: 700; color: #ffffff; }
+        padding: 14px;
+        spacing: 6px;
+        Text { text: root.titulo; font-size: 15px; font-weight: 700; color: #ffffff; }
         Text { text: root.para-que-sirve; font-size: 13px; color: #d0d0e0; wrap: word-wrap; }
-        if root.ejemplo != "": Rectangle {
-            background: #10101a;
-            border-radius: 6px;
-            VerticalBox {
-                padding: 10px;
-                spacing: 2px;
-                Text { text: "Ejemplo de uso"; font-size: 11px; font-weight: 700; color: #6ee7a0; }
-                Text { text: root.ejemplo; font-size: 12px; color: #a0a0c0; wrap: word-wrap; }
-            }
-        }
-    }
-}
-
-// Campo de texto con etiqueta, para los 3 formularios de alta.
-component CampoTexto inherits HorizontalBox {
-    in property <string> etiqueta;
-    in-out property <string> valor <=> entrada.text;
-    height: 32px;
-    Text { text: root.etiqueta; width: 130px; color: #a0a0c0; font-size: 12px; vertical-alignment: center; }
-    entrada := LineEdit { horizontal-stretch: 1; }
-}
-
-// Checkbox con etiqueta, para publicado_web / publicado_rrss.
-component CampoCheck inherits HorizontalBox {
-    in property <string> etiqueta;
-    in-out property <bool> valor <=> caja.checked;
-    height: 32px;
-    caja := CheckBox { text: root.etiqueta; }
-}
-
-// Campo numerico: igual que CampoTexto pero avisa en la propia etiqueta que
-// solo se espera un numero. El bloqueo real (no guardar si no es numero) se
-// hace en Rust al momento de guardar (parse_numero / parse_numero_obligatorio).
-component CampoNumero inherits HorizontalBox {
-    in property <string> etiqueta;
-    in-out property <string> valor <=> entrada.text;
-    height: 32px;
-    Text { text: root.etiqueta + " (número)"; width: 190px; color: #a0a0c0; font-size: 12px; vertical-alignment: center; wrap: word-wrap; }
-    entrada := LineEdit { horizontal-stretch: 1; placeholder-text: "0"; }
-}
-
-// Campo de seleccion (lista fija): evita errores de tipeo en estatus/tipo,
-// que ademas la logica de negocio compara con strings exactos (ej. "Venta",
-// "Pagado"). El valor viaje igual que en CampoTexto (string plano), asi que
-// el lado Rust no necesita cambios: solo cambia el widget visual.
-component CampoSelector inherits HorizontalBox {
-    in property <string> etiqueta;
-    in property <[string]> opciones;
-    in-out property <string> valor <=> combo.current-value;
-    height: 32px;
-    Text { text: root.etiqueta; width: 190px; color: #a0a0c0; font-size: 12px; vertical-alignment: center; wrap: word-wrap; }
-    combo := ComboBox { model: root.opciones; horizontal-stretch: 1; }
-}
-
-// Selector de fecha con 3 ruedas (dia/mes/anio) en vez de texto libre, para
-// que sea imposible escribir una fecha con formato invalido. Se precarga
-// con la fecha de "hoy" desde Rust al abrir un formulario nuevo.
-component CampoFecha inherits HorizontalBox {
-    in property <string> etiqueta;
-    in-out property <int> dia <=> rueda-dia.value;
-    in-out property <int> mes <=> rueda-mes.value;
-    in-out property <int> anio <=> rueda-anio.value;
-    height: 36px;
-    spacing: 6px;
-    alignment: start;
-    Text { text: root.etiqueta; width: 190px; color: #a0a0c0; font-size: 12px; vertical-alignment: center; wrap: word-wrap; }
-    rueda-dia := SpinBox { minimum: 1; maximum: 31; width: 96px; horizontal-stretch: 0; }
-    Text { text: "/"; width: 12px; color: #a0a0c0; font-size: 14px; horizontal-alignment: center; vertical-alignment: center; }
-    rueda-mes := SpinBox { minimum: 1; maximum: 12; width: 96px; horizontal-stretch: 0; }
-    Text { text: "/"; width: 12px; color: #a0a0c0; font-size: 14px; horizontal-alignment: center; vertical-alignment: center; }
-    rueda-anio := SpinBox { minimum: 2000; maximum: 2100; width: 110px; horizontal-stretch: 0; }
-    Rectangle { horizontal-stretch: 1; }
-}
-
-// Campo para elegir un asesor (id_captador / id_cerrador / etc). Se puede
-// escribir el nombre O el ID: a medida que se tipea aparece una lista de
-// sugerencias debajo (nombre + ID) y al tocar una se completa el campo con
-// el ID correcto. El valor que queda guardado en "valor" sigue siendo
-// siempre el ID (igual que antes), asi que del lado de Rust no cambia nada
-// del guardado/validacion: esto solo mejora la forma de cargar el dato.
-component CampoAsesor inherits Rectangle {
-    in property <string> etiqueta;
-    in-out property <string> valor <=> entrada.text;
-    // Lista completa de asesores (id + nombre), para poder mostrar el
-    // nombre resuelto debajo del campo apenas el ID coincide con alguno.
-    in property <[AsesorOpcion]> opciones;
-    // Busqueda por texto parcial (nombre o ID); la logica de filtrado vive
-    // en Rust porque el lenguaje .slint no tiene "contains" de strings.
-    callback buscar(string) -> [AsesorOpcion];
-    // Resuelve el nombre del asesor a partir del ID guardado en "valor".
-    // Igual que "buscar", esta logica vive en Rust porque .slint no permite
-    // bucles imperativos (for/return) dentro de una function. Ojo: no se
-    // puede bindear directo a una property (Slint no permite llamar un
-    // callback, que es impuro, desde un binding), asi que se llama a mano
-    // en "changed valor" / "changed opciones" y se guarda el resultado.
-    callback resolver-nombre(string) -> string;
-
-    property <[AsesorOpcion]> sugerencias: [];
-    property <bool> mostrar-sugerencias: false;
-    property <string> nombre-resuelto-actual: "";
-
-    init => {
-        root.nombre-resuelto-actual = root.valor == "" ? "" : root.resolver-nombre(root.valor);
-    }
-    changed valor => {
-        root.nombre-resuelto-actual = root.valor == "" ? "" : root.resolver-nombre(root.valor);
-    }
-    changed opciones => {
-        root.nombre-resuelto-actual = root.valor == "" ? "" : root.resolver-nombre(root.valor);
-    }
-
-    VerticalBox {
-        padding: 0px;
-        spacing: 2px;
-
-        HorizontalBox {
-            height: 32px;
-            padding: 0px;
-            spacing: 4px;
-            Text { text: root.etiqueta; width: 130px; color: #a0a0c0; font-size: 12px; vertical-alignment: center; }
-            entrada := LineEdit {
-                horizontal-stretch: 1;
-                placeholder-text: "Nombre o ID del asesor...";
-                edited(texto) => {
-                    if texto == "" {
-                        root.sugerencias = [];
-                        root.mostrar-sugerencias = false;
-                    } else {
-                        root.sugerencias = root.buscar(texto);
-                        root.mostrar-sugerencias = root.sugerencias.length > 0;
-                    }
-                }
-            }
-        }
-
-        if root.valor != "" && root.nombre-resuelto-actual != "": HorizontalBox {
-            padding: 0px;
-            spacing: 0px;
-            Rectangle { width: 134px; }
-            Text {
-                text: "✓ " + root.nombre-resuelto-actual;
-                font-size: 11px;
-                color: #6ee7a0;
-            }
-        }
-        if root.valor != "" && root.nombre-resuelto-actual == "" && !root.mostrar-sugerencias: HorizontalBox {
-            padding: 0px;
-            spacing: 0px;
-            Rectangle { width: 134px; }
-            Text {
-                text: "No coincide con ningún ID de BD Asesores todavía";
-                font-size: 11px;
-                color: #e0a05a;
-            }
-        }
-
-        if root.mostrar-sugerencias: HorizontalBox {
-            padding: 0px;
-            spacing: 0px;
-            Rectangle { width: 134px; }
-            Rectangle {
-            background: #20202f;
-            border-radius: 6px;
-            border-width: 1px;
-            border-color: #33334d;
-            VerticalBox {
-                padding: 4px;
-                spacing: 0px;
-                for op in root.sugerencias: fila-sug := TouchArea {
-                    height: 28px;
-                    mouse-cursor: pointer;
-                    clicked => {
-                        root.valor = op.id;
-                        root.mostrar-sugerencias = false;
-                        root.sugerencias = [];
-                    }
-                    Rectangle {
-                        background: fila-sug.has-hover ? #2a2a40 : transparent;
-                        border-radius: 4px;
-                        Text {
-                            text: op.nombre + "   ·   " + op.id;
-                            color: #e0e0f0;
-                            font-size: 12px;
-                            vertical-alignment: center;
-                            x: 6px;
-                        }
-                    }
-                }
-                cerrar-sug := TouchArea {
-                    height: 20px;
-                    mouse-cursor: pointer;
-                    clicked => { root.mostrar-sugerencias = false; }
-                    Text {
-                        text: "Cerrar sugerencias";
-                        color: #7070a0;
-                        font-size: 11px;
-                        horizontal-alignment: right;
-                        width: 100%;
-                    }
-                }
-            }
-        }
-    }
     }
 }
 
 export component AppWindow inherits Window {
-    title: "InmoCore Analytics Pro";
-    preferred-width: 1050px;
-    preferred-height: 680px;
+    title: "InmoCore — KAVELA Servicios Inmobiliarios";
+    preferred-width: 1180px;
+    preferred-height: 740px;
     background: #12121c;
 
-    // 0=Dashboard 1=Asesores 2=Matching 3=Legal 4=Embudo
-    // 5=Cierres 6=Finanzas 7=Captaciones 8=Reportes
-    property <int> pantalla: 0;
+    // 0=Dashboard 1=Negocios 2=Asesores 3=Mensualidad 4=Finanzas 5=Inventario 6=CRM
+    // 7=Guardia 8=TOP Mensual 9=Rankings 10=Configuracion 11=Graficos 12=Ayuda
+    in-out property <int> pantalla: 0;
+    callback ir-a(int);
 
     // --- Dashboard ---
-    in property <string> comisiones-oficina;
-    in property <string> matches-disponibles;
-    in property <string> expedientes-listos;
-    in property <string> pagos-pendientes;
-    callback actualizar-dashboard();
+    in property <[Kpi]> kpis;
+    in property <[Kpi]> honor;
+    in property <[string]> dash-headers;
+    in property <[Fila]> dash-rows;
 
-    // --- listados (todos usan TablaGenerica) ---
-    in property <[Fila]> asesores-rows;
-    callback actualizar-asesores();
-    callback eliminar-asesor(int);
+    // --- Pantalla generica (Negocios, Asesores, Mensualidad, Finanzas, Inventario, CRM,
+    //     Guardia, TOP, Rankings, Configuracion) ---
+    in property <string> titulo;
+    in property <string> ayuda;
+    in property <[string]> headers;
+    in property <int> visibles;
+    in property <[Fila]> rows;
+    in property <bool> puede-crear;
+    in property <bool> puede-editar;
+    in property <bool> puede-eliminar;
+    in property <string> mensaje;
+    callback nuevo();
+    callback editar(int);
+    callback eliminar(int);
 
-    // --- autocompletado por nombre/ID en los campos de asesor ---
-    in property <[AsesorOpcion]> asesores-opciones;
-    callback buscar-asesores(string) -> [AsesorOpcion];
-    // Dado un ID de asesor, devuelve su nombre (o "" si no existe). Usado por
-    // CampoAsesor para mostrar el "✓ Nombre" debajo del campo.
-    callback resolver-nombre-asesor(string) -> string;
+    // --- Formulario (se muestra en lugar de la tabla) ---
+    in-out property <bool> mostrar-form: false;
+    in property <[Campo]> campos;
+    in property <bool> editando;
+    callback campo-editado(int, string);
+    callback guardar();
+    callback cancelar();
 
-    // --- alta: Asesor ---
-    in-out property <bool> mostrar-form-asesor: false;
-    in-out property <string> asesor-id;
-    in-out property <string> asesor-nombre;
-    in-out property <int> asesor-fecha-ingreso-dia: 1;
-    in-out property <int> asesor-fecha-ingreso-mes: 1;
-    in-out property <int> asesor-fecha-ingreso-anio: 2026;
-    in-out property <string> asesor-talleres;
-    in property <string> mensaje-asesor;
-    callback guardar-asesor();
-    in-out property <int> asesor-editando: -1;
-    callback editar-asesor(int);
-    callback nuevo-asesor();
+    // --- Guardia juridica: buscador por fecha ---
+    in property <string> guardia-resultado;
+    callback consultar-guardia(string);
 
-    in property <[Fila]> matching-rows;
-    callback actualizar-matching();
-    callback eliminar-matching(int);
-
-    // --- alta: Matching ---
-    in-out property <bool> mostrar-form-matching: false;
-    in-out property <string> matching-id;
-    in-out property <string> matching-cliente;
-    in-out property <string> matching-asesor;
-    in-out property <string> matching-tipo-operacion;
-    in-out property <string> matching-zona;
-    in-out property <string> matching-presupuesto;
-    in-out property <string> matching-inmueble;
-    in-out property <string> matching-precio;
-    in-out property <int> matching-fecha-venc-dia: 1;
-    in-out property <int> matching-fecha-venc-mes: 1;
-    in-out property <int> matching-fecha-venc-anio: 2026;
-    in property <string> mensaje-matching;
-    callback guardar-matching();
-    in-out property <int> matching-editando: -1;
-    callback editar-matching(int);
-    callback nuevo-matching();
-
-    in property <[Fila]> legal-rows;
-    callback actualizar-legal();
-    callback eliminar-legal(int);
-
-    // --- alta: Legal ---
-    in-out property <bool> mostrar-form-legal: false;
-    in-out property <string> legal-cod-inmueble;
-    in-out property <string> legal-propietario;
-    in-out property <bool> legal-titulo;
-    in-out property <bool> legal-cedula;
-    in-out property <bool> legal-catastral;
-    in-out property <bool> legal-solvencia;
-    in-out property <string> legal-liberacion-hipoteca;
-    in-out property <string> legal-borrador-contrato;
-    in-out property <string> legal-estatus-notaria;
-    in property <string> mensaje-legal;
-    callback guardar-legal();
-    in-out property <int> legal-editando: -1;
-    callback editar-legal(int);
-    callback nuevo-legal();
-
-    in property <[Fila]> embudo-rows;
-    callback actualizar-embudo();
-    callback eliminar-embudo(int);
-
-    // --- alta: Embudo ---
-    in-out property <bool> mostrar-form-embudo: false;
-    in-out property <string> embudo-id-asesor;
-    in-out property <string> embudo-nombre-asesor;
-    in-out property <string> embudo-llamadas;
-    in-out property <string> embudo-citas;
-    in-out property <string> embudo-visitas;
-    in-out property <string> embudo-ofertas;
-    in-out property <string> embudo-cierres;
-    in property <string> mensaje-embudo;
-    callback guardar-embudo();
-    in-out property <int> embudo-editando: -1;
-    callback editar-embudo(int);
-    callback nuevo-embudo();
-
-    in property <[Fila]> cierres-rows;
-    callback actualizar-cierres();
-    callback eliminar-cierre(int);
-
-    in property <[Fila]> finanzas-rows;
-    in property <string> finanzas-total-pagado;
-    in property <string> finanzas-total-pendiente;
-    callback actualizar-finanzas();
-    callback eliminar-finanza(int);
-
-    in property <[Fila]> captaciones-rows;
-    in property <string> captaciones-disponibles;
-    in property <string> captaciones-cerradas;
-    in property <string> captaciones-otros;
-    callback actualizar-captaciones();
-    callback eliminar-captacion(int);
-
-    in property <[Fila]> reportes-rows;
-    callback actualizar-reportes();
-    callback eliminar-reporte(int);
-
-    // --- alta: Reporte Propietario ---
-    in-out property <bool> mostrar-form-reporte: false;
-    in-out property <string> reporte-cod-inmueble;
-    in-out property <string> reporte-propietario;
-    in-out property <string> reporte-telefono;
-    in-out property <string> reporte-id-asesor;
-    in-out property <string> reporte-visitas;
-    in-out property <string> reporte-ofertas;
-    in-out property <string> reporte-canales;
-    in-out property <string> reporte-notas;
-    in-out property <string> reporte-estatus-envio;
-    in property <string> mensaje-reporte;
-    callback guardar-reporte();
-    in-out property <int> reporte-editando: -1;
-    callback editar-reporte(int);
-    callback nuevo-reporte();
-
-    // --- alta: Cierre ---
-    in-out property <bool> mostrar-form-cierre: false;
-    in-out property <string> cierre-id;
-    in-out property <int> cierre-fecha-dia: 1;
-    in-out property <int> cierre-fecha-mes: 1;
-    in-out property <int> cierre-fecha-anio: 2026;
-    in-out property <string> cierre-cod-inmueble;
-    in-out property <string> cierre-tipo-operacion;
-    in-out property <string> cierre-monto;
-    in-out property <string> cierre-id-captador;
-    in-out property <string> cierre-id-cerrador;
-    in-out property <string> cierre-pct-comision;
-    in property <string> mensaje-cierre;
-    callback guardar-cierre();
-    in-out property <int> cierre-editando: -1;
-    callback editar-cierre(int);
-    callback nuevo-cierre();
-
-    // --- alta: Captacion ---
-    in-out property <bool> mostrar-form-captacion: false;
-    in-out property <string> captacion-cod-inmueble;
-    in-out property <string> captacion-tipo-propiedad;
-    in-out property <string> captacion-id-captador;
-    in-out property <int> captacion-fecha-dia: 1;
-    in-out property <int> captacion-fecha-mes: 1;
-    in-out property <int> captacion-fecha-anio: 2026;
-    in-out property <string> captacion-precio;
-    in-out property <string> captacion-estatus;
-    in-out property <bool> captacion-web;
-    in-out property <bool> captacion-rrss;
-    in property <string> mensaje-captacion;
-    callback guardar-captacion();
-    in-out property <int> captacion-editando: -1;
-    callback editar-captacion(int);
-    callback nuevo-captacion();
-
-    // --- alta: Finanza ---
-    in-out property <bool> mostrar-form-finanza: false;
-    in-out property <string> finanza-id;
-    in-out property <int> finanza-fecha-dia: 1;
-    in-out property <int> finanza-fecha-mes: 1;
-    in-out property <int> finanza-fecha-anio: 2026;
-    in-out property <string> finanza-semana;
-    in-out property <string> finanza-tipo-flujo;
-    in-out property <string> finanza-categoria;
-    in-out property <string> finanza-monto;
-    in-out property <string> finanza-estatus;
-    in property <string> mensaje-finanza;
-    callback guardar-finanza();
-    in-out property <int> finanza-editando: -1;
-    callback editar-finanza(int);
-    callback nuevo-finanza();
+    // --- Graficos ---
+    in property <[Grafico]> graficos;
 
     HorizontalLayout {
         Rectangle {
-            width: 190px;
+            width: 200px;
             background: #181824;
             VerticalBox {
                 padding: 10px;
-                spacing: 4px;
+                spacing: 3px;
+                alignment: start;
                 Text { text: "InmoCore"; font-size: 16px; font-weight: 700; color: #ffffff; }
-                Rectangle { height: 10px; }
-                NavButton { etiqueta: "Dashboard"; activo: root.pantalla == 0; clicked => { root.pantalla = 0; root.actualizar-dashboard(); } }
-                NavButton { etiqueta: "BD Asesores"; activo: root.pantalla == 1; clicked => { root.pantalla = 1; root.actualizar-asesores(); } }
-                NavButton { etiqueta: "Matching Redes"; activo: root.pantalla == 2; clicked => { root.pantalla = 2; root.actualizar-matching(); } }
-                NavButton { etiqueta: "Checklist Legal"; activo: root.pantalla == 3; clicked => { root.pantalla = 3; root.actualizar-legal(); } }
-                NavButton { etiqueta: "Embudo Operativo"; activo: root.pantalla == 4; clicked => { root.pantalla = 4; root.actualizar-embudo(); } }
-                NavButton { etiqueta: "BD Cierres"; activo: root.pantalla == 5; clicked => { root.pantalla = 5; root.actualizar-cierres(); } }
-                NavButton { etiqueta: "BD Finanzas"; activo: root.pantalla == 6; clicked => { root.pantalla = 6; root.actualizar-finanzas(); } }
-                NavButton { etiqueta: "BD Captaciones"; activo: root.pantalla == 7; clicked => { root.pantalla = 7; root.actualizar-captaciones(); } }
-                NavButton { etiqueta: "Reporte Propietario"; activo: root.pantalla == 8; clicked => { root.pantalla = 8; root.actualizar-reportes(); } }
-                Rectangle { height: 10px; }
-                NavButton { etiqueta: "❓ Ayuda"; activo: root.pantalla == 9; clicked => { root.pantalla = 9; } }
+                Text { text: "KAVELA Servicios Inmobiliarios"; font-size: 10px; color: #a0a0c0; wrap: word-wrap; }
+                Rectangle { height: 8px; }
+                NavButton { etiqueta: "Dashboard"; activo: root.pantalla == 0; clicked => { root.ir-a(0); } }
+                NavButton { etiqueta: "Registro Negocios"; activo: root.pantalla == 1; clicked => { root.ir-a(1); } }
+                NavButton { etiqueta: "Asesores"; activo: root.pantalla == 2; clicked => { root.ir-a(2); } }
+                NavButton { etiqueta: "Mensualidad"; activo: root.pantalla == 3; clicked => { root.ir-a(3); } }
+                NavButton { etiqueta: "Finanzas"; activo: root.pantalla == 4; clicked => { root.ir-a(4); } }
+                NavButton { etiqueta: "Inventario"; activo: root.pantalla == 5; clicked => { root.ir-a(5); } }
+                NavButton { etiqueta: "CRM Clientes"; activo: root.pantalla == 6; clicked => { root.ir-a(6); } }
+                NavButton { etiqueta: "Guardia Jurídica"; activo: root.pantalla == 7; clicked => { root.ir-a(7); } }
+                NavButton { etiqueta: "TOP Mensual"; activo: root.pantalla == 8; clicked => { root.ir-a(8); } }
+                NavButton { etiqueta: "Rankings"; activo: root.pantalla == 9; clicked => { root.ir-a(9); } }
+                NavButton { etiqueta: "Gráficos"; activo: root.pantalla == 11; clicked => { root.ir-a(11); } }
+                NavButton { etiqueta: "Configuración"; activo: root.pantalla == 10; clicked => { root.ir-a(10); } }
+                NavButton { etiqueta: "Ayuda"; activo: root.pantalla == 12; clicked => { root.ir-a(12); } }
             }
         }
 
         Rectangle {
             // --- 0: Dashboard ---
             if root.pantalla == 0: VerticalBox {
-                padding: 24px;
-                spacing: 16px;
-                Text { text: "Dashboard"; font-size: 22px; font-weight: 700; color: #ffffff; }
-                HorizontalBox {
-                    spacing: 16px;
-                    height: 140px;
-                    KpiCard { etiqueta: "Comisiones oficina"; valor: root.comisiones-oficina; }
-                    KpiCard { etiqueta: "Matches disponibles"; valor: root.matches-disponibles; }
-                    KpiCard { etiqueta: "Expedientes listos p/firma"; valor: root.expedientes-listos; }
-                    KpiCard { etiqueta: "Pagos pendientes"; valor: root.pagos-pendientes; }
-                }
-                Button { text: "Actualizar"; clicked => { root.actualizar-dashboard(); } }
-                Rectangle {}
-            }
-
-            // --- 1: BD_Asesores (+ alta) ---
-            if root.pantalla == 1: VerticalBox {
-                padding: 24px;
+                padding: 20px;
                 spacing: 12px;
                 HorizontalBox {
-                    Text { text: "BD Asesores"; font-size: 22px; font-weight: 700; color: #ffffff; horizontal-stretch: 1; }
-                    Button {
-                        text: root.mostrar-form-asesor ? "Cerrar formulario" : "Nuevo asesor";
-                        clicked => {
-                            if root.mostrar-form-asesor {
-                                root.mostrar-form-asesor = false;
-                            } else {
-                                root.nuevo-asesor();
-                            }
-                        }
-                    }
-                    Button { text: "Actualizar"; clicked => { root.actualizar-asesores(); } }
+                    Text { text: "Tablero ejecutivo"; font-size: 22px; font-weight: 700; color: #ffffff; horizontal-stretch: 1; }
+                    Button { text: "Actualizar"; clicked => { root.ir-a(0); } }
                 }
-                if root.mostrar-form-asesor: Rectangle {
-                    background: #1a1a26;
-                    border-radius: 8px;
-                    VerticalBox {
-                        padding: 12px;
-                        spacing: 4px;
-                        CampoTexto { etiqueta: "ID (ej. AS-004)"; valor <=> root.asesor-id; }
-                        CampoTexto { etiqueta: "Nombre"; valor <=> root.asesor-nombre; }
-                        CampoFecha {
-                            etiqueta: "Fecha ingreso";
-                            dia <=> root.asesor-fecha-ingreso-dia;
-                            mes <=> root.asesor-fecha-ingreso-mes;
-                            anio <=> root.asesor-fecha-ingreso-anio;
-                        }
-                        CampoNumero { etiqueta: "Talleres asistidos"; valor <=> root.asesor-talleres; }
-                        HorizontalBox {
-                            Button { text: root.asesor-editando >= 0 ? "Actualizar" : "Guardar"; clicked => { root.guardar-asesor(); } }
-                            Text { text: root.mensaje-asesor; color: #a0a0c0; font-size: 12px; vertical-alignment: center; }
-                        }
-                    }
+                HorizontalBox {
+                    spacing: 10px;
+                    height: 84px;
+                    for k in root.kpis: KpiCard { etiqueta: k.etiqueta; valor: k.valor; }
                 }
+                Text { text: "Cuadro de honor — período completo"; font-size: 13px; font-weight: 700; color: #a0a0c0; }
+                HorizontalBox {
+                    spacing: 10px;
+                    height: 74px;
+                    for k in root.honor: KpiCard { etiqueta: k.etiqueta; valor: k.valor; }
+                }
+                Text { text: "Desempeño acumulado por asesor"; font-size: 13px; font-weight: 700; color: #a0a0c0; }
                 TablaGenerica {
-                    headers: ["ID", "Nombre", "Ventas", "Alquileres", "Facturado", "% Asistencia", "Score", "Ranking"];
-                    rows: root.asesores-rows;
-                    eliminar(i) => { root.eliminar-asesor(i); }
-                    editar(i) => { root.editar-asesor(i); }
+                    headers: root.dash-headers;
+                    rows: root.dash-rows;
+                    puede-editar: false;
+                    puede-eliminar: false;
                 }
             }
 
-            // --- 2: Matching_Redes (+ alta) ---
-            if root.pantalla == 2: VerticalBox {
-                padding: 24px;
+            // --- 11: Graficos ---
+            if root.pantalla == 11: VerticalBox {
+                padding: 20px;
                 spacing: 12px;
-                HorizontalBox {
-                    Text { text: "Matching Redes"; font-size: 22px; font-weight: 700; color: #ffffff; horizontal-stretch: 1; }
-                    Button {
-                        text: root.mostrar-form-matching ? "Cerrar formulario" : "Nuevo requerimiento";
-                        clicked => {
-                            if root.mostrar-form-matching {
-                                root.mostrar-form-matching = false;
-                            } else {
-                                root.nuevo-matching();
-                            }
-                        }
-                    }
-                    Button { text: "Actualizar"; clicked => { root.actualizar-matching(); } }
-                }
-                if root.mostrar-form-matching: Rectangle {
-                    background: #1a1a26;
-                    border-radius: 8px;
-                    VerticalBox {
-                        padding: 12px;
-                        spacing: 4px;
-                        CampoTexto { etiqueta: "ID (ej. REQ-004)"; valor <=> root.matching-id; }
-                        CampoTexto { etiqueta: "Cliente buscador"; valor <=> root.matching-cliente; }
-                        CampoAsesor {
-                            etiqueta: "ID Asesor cliente";
-                            valor <=> root.matching-asesor;
-                            opciones: root.asesores-opciones;
-                            buscar(t) => { return root.buscar-asesores(t); }
-                            resolver-nombre(id) => { return root.resolver-nombre-asesor(id); }
-                        }
-                        CampoSelector { etiqueta: "Tipo de operación"; opciones: ["Venta", "Alquiler"]; valor <=> root.matching-tipo-operacion; }
-                        CampoTexto { etiqueta: "Zona deseada"; valor <=> root.matching-zona; }
-                        CampoNumero { etiqueta: "Presupuesto máx."; valor <=> root.matching-presupuesto; }
-                        CampoTexto { etiqueta: "Cod. inmueble matcheado"; valor <=> root.matching-inmueble; }
-                        CampoNumero { etiqueta: "Precio lista inmueble"; valor <=> root.matching-precio; }
-                        CampoFecha {
-                            etiqueta: "Venc. exclusividad";
-                            dia <=> root.matching-fecha-venc-dia;
-                            mes <=> root.matching-fecha-venc-mes;
-                            anio <=> root.matching-fecha-venc-anio;
-                        }
-                        HorizontalBox {
-                            Button { text: root.matching-editando >= 0 ? "Actualizar" : "Guardar"; clicked => { root.guardar-matching(); } }
-                            Text { text: root.mensaje-matching; color: #a0a0c0; font-size: 12px; vertical-alignment: center; }
-                        }
-                    }
-                }
-                TablaGenerica {
-                    headers: ["ID", "Cliente", "Asesor", "Tipo Op", "Zona", "Presup. Max", "Inmueble", "Precio Lista", "Venc. Exclusiv.", "Días Venc.", "Nivel Match"];
-                    rows: root.matching-rows;
-                    eliminar(i) => { root.eliminar-matching(i); }
-                    editar(i) => { root.editar-matching(i); }
-                }
-            }
-
-            // --- 3: Checklist_Legal (+ alta) ---
-            if root.pantalla == 3: VerticalBox {
-                padding: 24px;
-                spacing: 12px;
-                HorizontalBox {
-                    Text { text: "Checklist Legal"; font-size: 22px; font-weight: 700; color: #ffffff; horizontal-stretch: 1; }
-                    Button {
-                        text: root.mostrar-form-legal ? "Cerrar formulario" : "Nuevo expediente";
-                        clicked => {
-                            if root.mostrar-form-legal {
-                                root.mostrar-form-legal = false;
-                            } else {
-                                root.nuevo-legal();
-                            }
-                        }
-                    }
-                    Button { text: "Actualizar"; clicked => { root.actualizar-legal(); } }
-                }
-                if root.mostrar-form-legal: Rectangle {
-                    background: #1a1a26;
-                    border-radius: 8px;
-                    VerticalBox {
-                        padding: 12px;
-                        spacing: 4px;
-                        CampoTexto { etiqueta: "Cod. Inmueble"; valor <=> root.legal-cod-inmueble; }
-                        CampoTexto { etiqueta: "Propietario"; valor <=> root.legal-propietario; }
-                        HorizontalBox {
-                            spacing: 16px;
-                            CampoCheck { etiqueta: "Título propiedad"; valor <=> root.legal-titulo; }
-                            CampoCheck { etiqueta: "Cédula/RIF"; valor <=> root.legal-cedula; }
-                        }
-                        HorizontalBox {
-                            spacing: 16px;
-                            CampoCheck { etiqueta: "Ficha catastral"; valor <=> root.legal-catastral; }
-                            CampoCheck { etiqueta: "Solvencia municipal"; valor <=> root.legal-solvencia; }
-                        }
-                        CampoSelector { etiqueta: "Liberación hipoteca"; opciones: ["SI", "NO", "N/A"]; valor <=> root.legal-liberacion-hipoteca; }
-                        CampoSelector { etiqueta: "Borrador contrato"; opciones: ["APROBADO", "EN REVISIÓN", "PENDIENTE"]; valor <=> root.legal-borrador-contrato; }
-                        CampoSelector { etiqueta: "Estatus notaría"; opciones: ["PENDIENTE", "EN TRÁMITE", "PROGRAMADA", "COMPLETADA"]; valor <=> root.legal-estatus-notaria; }
-                        HorizontalBox {
-                            Button { text: root.legal-editando >= 0 ? "Actualizar" : "Guardar"; clicked => { root.guardar-legal(); } }
-                            Text { text: root.mensaje-legal; color: #a0a0c0; font-size: 12px; vertical-alignment: center; }
-                        }
-                    }
-                }
-                TablaGenerica {
-                    headers: ["Cod. Inmueble", "Propietario", "Título", "Cédula/RIF", "Catastral", "Solvencia", "Lib. Hipoteca", "Borrador Contrato", "Notaría", "Estatus"];
-                    rows: root.legal-rows;
-                    eliminar(i) => { root.eliminar-legal(i); }
-                    editar(i) => { root.editar-legal(i); }
-                }
-            }
-
-            // --- 4: Embudo_Operativo (+ alta) ---
-            if root.pantalla == 4: VerticalBox {
-                padding: 24px;
-                spacing: 12px;
-                HorizontalBox {
-                    Text { text: "Embudo Operativo"; font-size: 22px; font-weight: 700; color: #ffffff; horizontal-stretch: 1; }
-                    Button {
-                        text: root.mostrar-form-embudo ? "Cerrar formulario" : "Nuevo registro";
-                        clicked => {
-                            if root.mostrar-form-embudo {
-                                root.mostrar-form-embudo = false;
-                            } else {
-                                root.nuevo-embudo();
-                            }
-                        }
-                    }
-                    Button { text: "Actualizar"; clicked => { root.actualizar-embudo(); } }
-                }
-                if root.mostrar-form-embudo: Rectangle {
-                    background: #1a1a26;
-                    border-radius: 8px;
-                    VerticalBox {
-                        padding: 12px;
-                        spacing: 4px;
-                        CampoAsesor {
-                            etiqueta: "ID Asesor";
-                            valor <=> root.embudo-id-asesor;
-                            opciones: root.asesores-opciones;
-                            buscar(t) => { return root.buscar-asesores(t); }
-                            resolver-nombre(id) => { return root.resolver-nombre-asesor(id); }
-                        }
-                        CampoTexto { etiqueta: "Nombre asesor"; valor <=> root.embudo-nombre-asesor; }
-                        CampoNumero { etiqueta: "Llamadas realizadas"; valor <=> root.embudo-llamadas; }
-                        CampoNumero { etiqueta: "Citas captación"; valor <=> root.embudo-citas; }
-                        CampoNumero { etiqueta: "Visitas guiadas"; valor <=> root.embudo-visitas; }
-                        CampoNumero { etiqueta: "Ofertas recibidas"; valor <=> root.embudo-ofertas; }
-                        CampoNumero { etiqueta: "Cierres del mes"; valor <=> root.embudo-cierres; }
-                        HorizontalBox {
-                            Button { text: root.embudo-editando >= 0 ? "Actualizar" : "Guardar"; clicked => { root.guardar-embudo(); } }
-                            Text { text: root.mensaje-embudo; color: #a0a0c0; font-size: 12px; vertical-alignment: center; }
-                        }
-                    }
-                }
-                TablaGenerica {
-                    headers: ["ID Asesor", "Nombre", "Llamadas", "Citas", "Visitas", "Ofertas", "Cierres", "Tasa Conv.", "Nivel Actividad"];
-                    rows: root.embudo-rows;
-                    eliminar(i) => { root.eliminar-embudo(i); }
-                    editar(i) => { root.editar-embudo(i); }
-                }
-            }
-
-            // --- 5: BD_Cierres (+ alta) ---
-            if root.pantalla == 5: VerticalBox {
-                padding: 24px;
-                spacing: 12px;
-                HorizontalBox {
-                    Text { text: "BD Cierres"; font-size: 22px; font-weight: 700; color: #ffffff; horizontal-stretch: 1; }
-                    Button {
-                        text: root.mostrar-form-cierre ? "Cerrar formulario" : "Nuevo cierre";
-                        clicked => {
-                            if root.mostrar-form-cierre {
-                                root.mostrar-form-cierre = false;
-                            } else {
-                                root.nuevo-cierre();
-                            }
-                        }
-                    }
-                    Button { text: "Actualizar"; clicked => { root.actualizar-cierres(); } }
-                }
-                if root.mostrar-form-cierre: Rectangle {
-                    background: #1a1a26;
-                    border-radius: 8px;
-                    VerticalBox {
-                        padding: 12px;
-                        spacing: 4px;
-                        CampoTexto { etiqueta: "ID"; valor <=> root.cierre-id; }
-                        CampoFecha {
-                            etiqueta: "Fecha de cierre";
-                            dia <=> root.cierre-fecha-dia;
-                            mes <=> root.cierre-fecha-mes;
-                            anio <=> root.cierre-fecha-anio;
-                        }
-                        CampoTexto { etiqueta: "Cod. Inmueble"; valor <=> root.cierre-cod-inmueble; }
-                        CampoSelector { etiqueta: "Tipo de operación"; opciones: ["Venta", "Alquiler"]; valor <=> root.cierre-tipo-operacion; }
-                        CampoNumero { etiqueta: "Monto operación"; valor <=> root.cierre-monto; }
-                        CampoAsesor {
-                            etiqueta: "ID Captador";
-                            valor <=> root.cierre-id-captador;
-                            opciones: root.asesores-opciones;
-                            buscar(t) => { return root.buscar-asesores(t); }
-                            resolver-nombre(id) => { return root.resolver-nombre-asesor(id); }
-                        }
-                        CampoAsesor {
-                            etiqueta: "ID Cerrador";
-                            valor <=> root.cierre-id-cerrador;
-                            opciones: root.asesores-opciones;
-                            buscar(t) => { return root.buscar-asesores(t); }
-                            resolver-nombre(id) => { return root.resolver-nombre-asesor(id); }
-                        }
-                        CampoNumero { etiqueta: "% Comisión (0.05 = 5%)"; valor <=> root.cierre-pct-comision; }
-                        HorizontalBox {
-                            Button { text: root.cierre-editando >= 0 ? "Actualizar" : "Guardar"; clicked => { root.guardar-cierre(); } }
-                            Text { text: root.mensaje-cierre; color: #a0a0c0; font-size: 12px; vertical-alignment: center; }
-                        }
-                    }
-                }
-                TablaGenerica {
-                    headers: ["ID", "Fecha", "Cod. Inmueble", "Tipo Op", "Monto", "Captador", "Cerrador", "% Comisión", "Com. Oficina", "Pago Asesores"];
-                    rows: root.cierres-rows;
-                    eliminar(i) => { root.eliminar-cierre(i); }
-                    editar(i) => { root.editar-cierre(i); }
-                }
-            }
-
-            // --- 6: BD_Finanzas (+ alta) ---
-            if root.pantalla == 6: VerticalBox {
-                padding: 24px;
-                spacing: 12px;
-                HorizontalBox {
-                    Text { text: "BD Finanzas"; font-size: 22px; font-weight: 700; color: #ffffff; horizontal-stretch: 1; }
-                    Button {
-                        text: root.mostrar-form-finanza ? "Cerrar formulario" : "Nueva transacción";
-                        clicked => {
-                            if root.mostrar-form-finanza {
-                                root.mostrar-form-finanza = false;
-                            } else {
-                                root.nuevo-finanza();
-                            }
-                        }
-                    }
-                    Button { text: "Actualizar"; clicked => { root.actualizar-finanzas(); } }
-                }
-                HorizontalBox {
-                    spacing: 16px;
-                    height: 90px;
-                    KpiCard { etiqueta: "Total pagado"; valor: root.finanzas-total-pagado; }
-                    KpiCard { etiqueta: "Total pendiente"; valor: root.finanzas-total-pendiente; }
-                }
-                if root.mostrar-form-finanza: Rectangle {
-                    background: #1a1a26;
-                    border-radius: 8px;
-                    VerticalBox {
-                        padding: 12px;
-                        spacing: 4px;
-                        CampoTexto { etiqueta: "ID"; valor <=> root.finanza-id; }
-                        CampoFecha {
-                            etiqueta: "Fecha";
-                            dia <=> root.finanza-fecha-dia;
-                            mes <=> root.finanza-fecha-mes;
-                            anio <=> root.finanza-fecha-anio;
-                        }
-                        CampoTexto { etiqueta: "Semana"; valor <=> root.finanza-semana; }
-                        CampoSelector { etiqueta: "Tipo de flujo"; opciones: ["Ingreso", "Egreso"]; valor <=> root.finanza-tipo-flujo; }
-                        CampoTexto { etiqueta: "Categoría"; valor <=> root.finanza-categoria; }
-                        CampoNumero { etiqueta: "Monto"; valor <=> root.finanza-monto; }
-                        CampoSelector { etiqueta: "Estatus de pago"; opciones: ["Pagado", "Pendiente"]; valor <=> root.finanza-estatus; }
-                        HorizontalBox {
-                            Button { text: root.finanza-editando >= 0 ? "Actualizar" : "Guardar"; clicked => { root.guardar-finanza(); } }
-                            Text { text: root.mensaje-finanza; color: #a0a0c0; font-size: 12px; vertical-alignment: center; }
-                        }
-                    }
-                }
-                TablaGenerica {
-                    headers: ["ID", "Fecha", "Semana", "Tipo Flujo", "Categoría", "Monto", "Estatus"];
-                    rows: root.finanzas-rows;
-                    eliminar(i) => { root.eliminar-finanza(i); }
-                    editar(i) => { root.editar-finanza(i); }
-                }
-            }
-
-            // --- 7: BD_Captaciones (+ alta) ---
-            if root.pantalla == 7: VerticalBox {
-                padding: 24px;
-                spacing: 12px;
-                HorizontalBox {
-                    Text { text: "BD Captaciones"; font-size: 22px; font-weight: 700; color: #ffffff; horizontal-stretch: 1; }
-                    Button {
-                        text: root.mostrar-form-captacion ? "Cerrar formulario" : "Nueva captación";
-                        clicked => {
-                            if root.mostrar-form-captacion {
-                                root.mostrar-form-captacion = false;
-                            } else {
-                                root.nuevo-captacion();
-                            }
-                        }
-                    }
-                    Button { text: "Actualizar"; clicked => { root.actualizar-captaciones(); } }
-                }
-                if root.mostrar-form-captacion: Rectangle {
-                    background: #1a1a26;
-                    border-radius: 8px;
-                    VerticalBox {
-                        padding: 12px;
-                        spacing: 4px;
-                        CampoTexto { etiqueta: "Cod. Inmueble"; valor <=> root.captacion-cod-inmueble; }
-                        CampoSelector { etiqueta: "Tipo de propiedad"; opciones: ["Casa", "Apartamento", "Local Comercial", "Terreno", "Galpón", "Oficina"]; valor <=> root.captacion-tipo-propiedad; }
-                        CampoAsesor {
-                            etiqueta: "ID Captador";
-                            valor <=> root.captacion-id-captador;
-                            opciones: root.asesores-opciones;
-                            buscar(t) => { return root.buscar-asesores(t); }
-                            resolver-nombre(id) => { return root.resolver-nombre-asesor(id); }
-                        }
-                        CampoFecha {
-                            etiqueta: "Fecha de captación";
-                            dia <=> root.captacion-fecha-dia;
-                            mes <=> root.captacion-fecha-mes;
-                            anio <=> root.captacion-fecha-anio;
-                        }
-                        CampoNumero { etiqueta: "Precio Lista"; valor <=> root.captacion-precio; }
-                        CampoSelector { etiqueta: "Estatus"; opciones: ["Disponible", "Cerrado", "Reservado", "Retirado"]; valor <=> root.captacion-estatus; }
-                        HorizontalBox {
-                            spacing: 16px;
-                            CampoCheck { etiqueta: "Publicado Web"; valor <=> root.captacion-web; }
-                            CampoCheck { etiqueta: "Publicado RRSS"; valor <=> root.captacion-rrss; }
-                        }
-                        HorizontalBox {
-                            Button { text: root.captacion-editando >= 0 ? "Actualizar" : "Guardar"; clicked => { root.guardar-captacion(); } }
-                            Text { text: root.mensaje-captacion; color: #a0a0c0; font-size: 12px; vertical-alignment: center; }
-                        }
-                    }
-                }
-                HorizontalBox {
-                    spacing: 16px;
-                    height: 90px;
-                    KpiCard { etiqueta: "Disponibles"; valor: root.captaciones-disponibles; }
-                    KpiCard { etiqueta: "Cerradas"; valor: root.captaciones-cerradas; }
-                    KpiCard { etiqueta: "Otros estatus"; valor: root.captaciones-otros; }
-                }
-                TablaGenerica {
-                    headers: ["Cod. Inmueble", "Tipo", "Captador", "Fecha", "Precio Lista", "Estatus", "Web", "RRSS"];
-                    rows: root.captaciones-rows;
-                    eliminar(i) => { root.eliminar-captacion(i); }
-                    editar(i) => { root.editar-captacion(i); }
-                }
-            }
-
-            // --- 8: Reporte_Propietario (+ alta) ---
-            if root.pantalla == 8: VerticalBox {
-                padding: 24px;
-                spacing: 12px;
-                HorizontalBox {
-                    Text { text: "Reporte Propietario"; font-size: 22px; font-weight: 700; color: #ffffff; horizontal-stretch: 1; }
-                    Button {
-                        text: root.mostrar-form-reporte ? "Cerrar formulario" : "Nuevo reporte";
-                        clicked => {
-                            if root.mostrar-form-reporte {
-                                root.mostrar-form-reporte = false;
-                            } else {
-                                root.nuevo-reporte();
-                            }
-                        }
-                    }
-                    Button { text: "Actualizar"; clicked => { root.actualizar-reportes(); } }
-                }
-                if root.mostrar-form-reporte: Rectangle {
-                    background: #1a1a26;
-                    border-radius: 8px;
-                    VerticalBox {
-                        padding: 12px;
-                        spacing: 4px;
-                        CampoTexto { etiqueta: "Cod. Inmueble"; valor <=> root.reporte-cod-inmueble; }
-                        CampoTexto { etiqueta: "Propietario"; valor <=> root.reporte-propietario; }
-                        CampoTexto { etiqueta: "Teléfono"; valor <=> root.reporte-telefono; }
-                        CampoAsesor {
-                            etiqueta: "ID Asesor";
-                            valor <=> root.reporte-id-asesor;
-                            opciones: root.asesores-opciones;
-                            buscar(t) => { return root.buscar-asesores(t); }
-                            resolver-nombre(id) => { return root.resolver-nombre-asesor(id); }
-                        }
-                        CampoNumero { etiqueta: "Visitas agendadas"; valor <=> root.reporte-visitas; }
-                        CampoNumero { etiqueta: "Ofertas recibidas"; valor <=> root.reporte-ofertas; }
-                        CampoTexto { etiqueta: "Canales publicación"; valor <=> root.reporte-canales; }
-                        CampoTexto { etiqueta: "Notas"; valor <=> root.reporte-notas; }
-                        CampoSelector { etiqueta: "Estatus envío"; opciones: ["ENVIADO", "PENDIENTE"]; valor <=> root.reporte-estatus-envio; }
-                        HorizontalBox {
-                            Button { text: root.reporte-editando >= 0 ? "Actualizar" : "Guardar"; clicked => { root.guardar-reporte(); } }
-                            Text { text: root.mensaje-reporte; color: #a0a0c0; font-size: 12px; vertical-alignment: center; }
-                        }
-                    }
-                }
-                TablaGenerica {
-                    headers: ["Cod. Inmueble", "Propietario", "Teléfono", "Asesor", "Visitas", "Ofertas", "Canales", "Notas", "Estatus Envío"];
-                    rows: root.reportes-rows;
-                    eliminar(i) => { root.eliminar-reporte(i); }
-                    editar(i) => { root.editar-reporte(i); }
-                }
-            }
-
-            // --- 9: Ayuda (manual de usuario) ---
-            if root.pantalla == 9: VerticalBox {
-                padding: 24px;
-                spacing: 12px;
-                Text { text: "Ayuda"; font-size: 22px; font-weight: 700; color: #ffffff; }
-                Text { text: "Guía rápida de qué hace cada pestaña y cómo usarla."; font-size: 13px; color: #a0a0c0; }
+                Text { text: "Gráficos y estadísticas"; font-size: 22px; font-weight: 700; color: #ffffff; }
                 ScrollView {
                     VerticalBox {
-                        padding: 0px;
-                        spacing: 10px;
-                        TarjetaAyuda {
-                            titulo: "📊 Dashboard";
-                            para-que-sirve: "Vista general de la oficina: comisiones generadas, matches disponibles, expedientes listos para firma y pagos pendientes. Es lo primero que conviene revisar al empezar el día.";
-                            ejemplo: "Entrás cada mañana, tocás \"Actualizar\" y ves de un vistazo si hay expedientes listos para firmar o pagos que se están acumulando.";
+                        alignment: start;
+                        spacing: 14px;
+                        for g in root.graficos: Rectangle {
+                            background: #1a1a26;
+                            border-radius: 8px;
+                            VerticalBox {
+                                padding: 14px;
+                                spacing: 4px;
+                                Text { text: g.titulo; font-size: 15px; font-weight: 700; color: #ffffff; }
+                                for b in g.barras: HorizontalBox {
+                                    padding: 0px;
+                                    spacing: 8px;
+                                    height: 24px;
+                                    Text { text: b.etiqueta; width: 150px; font-size: 12px; color: #d0d0e0; vertical-alignment: center; overflow: elide; wrap: no-wrap; }
+                                    Rectangle {
+                                        horizontal-stretch: 1;
+                                        background: #23233a;
+                                        border-radius: 4px;
+                                        Rectangle {
+                                            x: 0px;
+                                            width: parent.width * b.valor;
+                                            background: #6e8bff;
+                                            border-radius: 4px;
+                                        }
+                                    }
+                                    Text { text: b.texto; width: 110px; font-size: 12px; color: #e0e0f0; vertical-alignment: center; }
+                                }
+                                if g.barras.length == 0: Text { text: "Sin datos todavía."; font-size: 12px; color: #a0a0c0; }
+                            }
                         }
-                        TarjetaAyuda {
-                            titulo: "👤 BD Asesores";
-                            para-que-sirve: "Base de datos de los asesores de la oficina: ID, nombre, fecha de ingreso y talleres asistidos. Desde acá también se calculan sus ventas, alquileres, facturado y ranking.";
-                            ejemplo: "Se suma un asesor nuevo: tocás \"Nuevo asesor\", cargás su ID (ej. AS-004), nombre y fecha de ingreso, y guardás. Después aparece disponible en el resto de las pestañas donde se pide un asesor.";
-                        }
-                        TarjetaAyuda {
-                            titulo: "🔗 Matching Redes";
-                            para-que-sirve: "Cruza propiedades con posibles compradores/inquilinos según sus criterios de búsqueda, para detectar coincidencias entre lo que se tiene en cartera y lo que se busca.";
-                            ejemplo: "Cargás un cliente que busca un depto de 2 ambientes en cierta zona; el sistema te muestra qué propiedades de la cartera podrían coincidir con ese perfil.";
-                        }
-                        TarjetaAyuda {
-                            titulo: "✅ Checklist Legal";
-                            para-que-sirve: "Seguimiento de la documentación y pasos legales de cada operación (boletos, escrituras, certificados), para saber qué expedientes están completos y cuáles faltan.";
-                            ejemplo: "Antes de una firma, entrás al checklist de esa operación y marcás qué documentos ya están y cuáles siguen pendientes para no llegar a la escritura con algo incompleto.";
-                        }
-                        TarjetaAyuda {
-                            titulo: "🔄 Embudo Operativo";
-                            para-que-sirve: "Seguimiento del proceso comercial de cada oportunidad, desde el primer contacto hasta el cierre, para ver en qué etapa está cada operación en curso.";
-                            ejemplo: "Ves que un lead lleva dos semanas en la etapa de \"visita\" sin avanzar a \"oferta\": es una señal para que el asesor haga seguimiento.";
-                        }
-                        TarjetaAyuda {
-                            titulo: "🏠 BD Cierres";
-                            para-que-sirve: "Registro de las operaciones ya cerradas (ventas o alquileres concretados), con sus datos clave para historial y estadísticas.";
-                            ejemplo: "Se cierra una venta: cargás el registro con el asesor, el inmueble y el monto, y queda guardado como antecedente e insumo para las comisiones.";
-                        }
-                        TarjetaAyuda {
-                            titulo: "💰 BD Finanzas";
-                            para-que-sirve: "Control de comisiones, pagos y movimientos de dinero asociados a las operaciones de la oficina.";
-                            ejemplo: "Después de un cierre, cargás el pago de comisión correspondiente y podés ver en el Dashboard cuánto está pendiente de cobrar o pagar.";
-                        }
-                        TarjetaAyuda {
-                            titulo: "🏘️ BD Captaciones";
-                            para-que-sirve: "Base de datos de las propiedades captadas (las que la oficina tiene en cartera para vender o alquilar), con sus datos y estado.";
-                            ejemplo: "Un asesor capta un nuevo inmueble para la venta; lo cargás acá con sus datos y queda disponible para buscarlo en Matching Redes.";
-                        }
-                        TarjetaAyuda {
-                            titulo: "📄 Reporte Propietario";
-                            para-que-sirve: "Genera y guarda reportes para mantener informado al propietario de un inmueble: visitas agendadas, ofertas recibidas y canales de publicación usados.";
-                            ejemplo: "Cada semana armás un reporte por inmueble para avisarle al propietario cuántas visitas y ofertas tuvo, y marcás si ya se lo enviaste.";
-                        }
-                        Rectangle { height: 8px; }
                     }
+                }
+            }
+
+            // --- 12: Ayuda ---
+            if root.pantalla == 12: VerticalBox {
+                padding: 20px;
+                spacing: 10px;
+                Text { text: "Cómo funciona"; font-size: 22px; font-weight: 700; color: #ffffff; }
+                ScrollView {
+                    VerticalBox {
+                        alignment: start;
+                        spacing: 10px;
+                        TarjetaAyuda { titulo: "Regla general"; para-que-sirve: "Los negocios se cargan SOLO en Registro Negocios. Dashboard, Asesores, TOP Mensual, Rankings, Finanzas y Gráficos se calculan solos a partir de ahí."; }
+                        TarjetaAyuda { titulo: "Registro Negocios"; para-que-sirve: "Cada negocio cerrado: fecha, asesor, formato % (lo que se lleva el asesor), puntas, monto, tipo y comisión total. Comisión del asesor = comisión total × formato %; comisión de la oficina = el resto."; }
+                        TarjetaAyuda { titulo: "Asesores y puntaje"; para-que-sirve: "El puntaje del Dashboard = volumen × 0.5 + negocios × 200 + comisión del asesor × 0.3 + captaciones × 100. Una captación es un negocio donde el asesor aparece en 'Punta captadora'."; }
+                        TarjetaAyuda { titulo: "Mensualidad"; para-que-sirve: "Cuota de $10 por agente. Día de pago ≤ 5: a tiempo · ≤ 15: con mora · más de 15: mora severa · sin día: pendiente. Use Editar para poner el día de pago."; }
+                        TarjetaAyuda { titulo: "Finanzas"; para-que-sirve: "Ingresos = comisiones + mensualidades (automático). Los egresos (arriendo, servicios, marketing, nómina) se cargan con Editar en cada mes. Utilidad = ingresos − egresos."; }
+                        TarjetaAyuda { titulo: "Inventario, CRM y Guardia"; para-que-sirve: "Inventario: propiedades en cartera. CRM: seguimiento de clientes (el % de cierre sale de la etapa). Guardia: abogado por día y buscador por fecha."; }
+                    }
+                }
+            }
+
+            // --- Pantalla generica ---
+            if root.pantalla != 0 && root.pantalla != 11 && root.pantalla != 12: VerticalBox {
+                padding: 20px;
+                spacing: 10px;
+                HorizontalBox {
+                    Text { text: root.titulo; font-size: 22px; font-weight: 700; color: #ffffff; horizontal-stretch: 1; }
+                    if root.mostrar-form: Button { text: "Cancelar"; clicked => { root.cancelar(); } }
+                    if root.mostrar-form: Button { text: root.editando ? "Actualizar" : "Guardar"; primary: true; clicked => { root.guardar(); } }
+                    if !root.mostrar-form && root.puede-crear: Button { text: "Nuevo"; primary: true; clicked => { root.nuevo(); } }
+                    if !root.mostrar-form: Button { text: "Actualizar"; clicked => { root.ir-a(root.pantalla); } }
+                }
+                if root.ayuda != "" && !root.mostrar-form: Text { text: root.ayuda; font-size: 12px; color: #a0a0c0; wrap: word-wrap; }
+                if root.mensaje != "": Text { text: root.mensaje; font-size: 13px; color: #6ee7a0; wrap: word-wrap; }
+
+                // Buscador de la guardia (solo en esa pantalla)
+                if root.pantalla == 7 && !root.mostrar-form: Rectangle {
+                    background: #1a1a26;
+                    border-radius: 8px;
+                    height: 50px;
+                    HorizontalBox {
+                        padding: 8px;
+                        spacing: 8px;
+                        Text { text: "Fecha a consultar:"; font-size: 12px; color: #a0a0c0; vertical-alignment: center; }
+                        fecha-guardia := LineEdit { width: 150px; placeholder-text: "AAAA-MM-DD"; accepted(t) => { root.consultar-guardia(t); } }
+                        Button { text: "Consultar"; clicked => { root.consultar-guardia(fecha-guardia.text); } }
+                        Text { text: root.guardia-resultado; font-size: 13px; font-weight: 700; color: #ffffff; vertical-alignment: center; horizontal-stretch: 1; overflow: elide; }
+                    }
+                }
+
+                if root.mostrar-form: Rectangle {
+                    background: #1a1a26;
+                    border-radius: 8px;
+                    ScrollView {
+                        VerticalBox {
+                            padding: 12px;
+                            spacing: 4px;
+                            alignment: start;
+                            for c[i] in root.campos: HorizontalBox {
+                                height: 34px;
+                                spacing: 8px;
+                                Text { text: c.etiqueta; width: 260px; color: #a0a0c0; font-size: 12px; vertical-alignment: center; wrap: word-wrap; }
+                                if c.opciones.length == 0: LineEdit {
+                                    text: c.valor;
+                                    horizontal-stretch: 1;
+                                    edited(t) => { root.campo-editado(i, t); }
+                                }
+                                if c.opciones.length > 0: ComboBox {
+                                    model: c.opciones;
+                                    current-value: c.valor;
+                                    horizontal-stretch: 1;
+                                    selected(t) => { root.campo-editado(i, t); }
+                                }
+                            }
+                        }
+                    }
+                }
+                if !root.mostrar-form: TablaGenerica {
+                    headers: root.headers;
+                    visibles: root.visibles;
+                    rows: root.rows;
+                    puede-editar: root.puede-editar;
+                    puede-eliminar: root.puede-eliminar;
+                    editar(i) => { root.editar(i); }
+                    eliminar(i) => { root.eliminar(i); }
                 }
             }
         }

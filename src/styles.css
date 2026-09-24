@@ -205,3 +205,119 @@ form button[type="submit"] {
   color: var(--no);
   font-size: 0.9rem;
 }
+
+/* ---- KAVELA: pantalla generica, formularios, graficos ---- */
+
+.content h3 {
+  font-size: 0.95rem;
+  color: var(--texto-tenue);
+  margin: 1.2rem 0 0.6rem;
+}
+
+.encabezado {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.encabezado h2 { margin: 0 0 0.6rem; }
+
+.ayuda {
+  color: var(--texto-tenue);
+  font-size: 0.85rem;
+  margin: 0 0 0.8rem;
+}
+
+.tabla-scroll {
+  overflow-x: auto;
+  border-radius: 10px;
+}
+
+.btn, .btn-mini {
+  background: var(--acento);
+  border: none;
+  color: #04211d;
+  font-weight: 700;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.btn { padding: 0.5rem 1rem; font-size: 0.9rem; }
+
+.btn-mini {
+  padding: 0.2rem 0.6rem;
+  font-size: 0.78rem;
+  margin-right: 0.3rem;
+}
+
+.btn-peligro { background: var(--no); color: #fff; }
+
+.acciones { white-space: nowrap; }
+
+.buscador {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.8rem;
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-radius: 10px;
+  padding: 0.8rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.buscador label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  color: var(--texto-tenue);
+}
+
+.buscador input {
+  background: var(--bg);
+  border: 1px solid var(--borde);
+  color: var(--texto);
+  padding: 0.45rem 0.6rem;
+  border-radius: 6px;
+}
+
+form { max-width: 640px; }
+
+.fila-botones { display: flex; gap: 0.6rem; }
+
+.fila-botones button { flex: 1; }
+
+form button.btn-secundario {
+  margin-top: 0.4rem;
+  background: transparent;
+  border: 1px solid var(--borde);
+  color: var(--texto);
+  padding: 0.6rem;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.tarjeta, .grafico {
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-radius: 10px;
+  padding: 0.9rem 1.2rem;
+  margin-bottom: 1rem;
+}
+
+.tarjeta h3, .grafico h3 { margin: 0 0 0.4rem; color: var(--texto); }
+.tarjeta p { margin: 0; color: var(--texto-tenue); font-size: 0.9rem; }
+
+.barra {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.25rem 0;
+  font-size: 0.82rem;
+}
+
+.barra-etiqueta { width: 150px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.barra-pista { flex: 1; height: 16px; background: var(--panel2); border-radius: 4px; overflow: hidden; }
+.barra-relleno { display: block; height: 100%; background: var(--acento); border-radius: 4px; }
+.barra-texto { width: 110px; flex-shrink: 0; }
